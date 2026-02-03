@@ -35,11 +35,19 @@ cd ..
 echo -e "${YELLOW}Building example demo...${NC}"
 go build -o dist/stardewl-demo examples/simple_demo.go
 
+# 构建CLI应用
+echo -e "${YELLOW}Building CLI application...${NC}"
+go build -o dist/stardewl cmd/stardewl/main.go
+
 echo -e "${GREEN}Build completed!${NC}"
 echo -e "Output files in ${YELLOW}dist/${NC}:"
 ls -la dist/
 
 echo -e "\n${YELLOW}To start the signaling server:${NC}"
 echo -e "  ./dist/stardewl-signaling"
+echo -e "\n${YELLOW}To run the CLI application:${NC}"
+echo -e "  ./dist/stardewl --interactive"
+echo -e "  ./dist/stardewl --host"
+echo -e "  ./dist/stardewl --join=123456"
 echo -e "\n${YELLOW}To run the example demo:${NC}"
 echo -e "  ./dist/stardewl-demo"

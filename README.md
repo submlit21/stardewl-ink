@@ -38,7 +38,7 @@ stardewl-ink/
 ### 1. 环境准备
 ```bash
 # 克隆项目
-git clone https://github.com/submlit21/stardewl-ink.git
+git clone git@github.com:submlit21/stardewl-ink.git
 cd stardewl-ink
 
 # 设置 Go 代理（国内用户）
@@ -58,16 +58,26 @@ make build
 ./scripts/build.sh
 ```
 
-### 3. 启动信令服务器
+### 3. 使用 CLI 应用（立即开始联机！）
+```bash
+# 交互模式（推荐新手）
+./dist/stardewl --interactive
+
+# 或直接使用命令行
+./dist/stardewl --host          # 作为主机创建房间
+./dist/stardewl --join=123456   # 作为客户端加入房间
+```
+
+### 4. 启动信令服务器（如果需要）
 ```bash
 ./dist/stardewl-signaling
 # 服务器将在 http://localhost:8080 启动
 ```
 
-### 4. 运行示例
+### 5. 运行示例
 ```bash
 # 运行演示程序
-go run examples/simple_demo.go
+./dist/stardewl-demo
 ```
 
 ## 📖 详细文档

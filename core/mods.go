@@ -220,7 +220,11 @@ func FormatComparisonResult(comparison ModComparison) string {
 	if len(comparison.OnlyInLocal) > 0 {
 		sb.WriteString("只在本地存在的Mod:\n")
 		for _, mod := range comparison.OnlyInLocal {
-			sb.WriteString(fmt.Sprintf("  - %s (%s, %d bytes)\n", mod.Name, mod.Checksum[:8], mod.Size))
+			hashDisplay := mod.Checksum
+			if len(hashDisplay) > 8 {
+				hashDisplay = hashDisplay[:8]
+			}
+			sb.WriteString(fmt.Sprintf("  - %s (%s, %d bytes)\n", mod.Name, hashDisplay, mod.Size))
 		}
 		sb.WriteString("\n")
 	}
@@ -228,7 +232,11 @@ func FormatComparisonResult(comparison ModComparison) string {
 	if len(comparison.OnlyInRemote) > 0 {
 		sb.WriteString("只在远程存在的Mod:\n")
 		for _, mod := range comparison.OnlyInRemote {
-			sb.WriteString(fmt.Sprintf("  - %s (%s, %d bytes)\n", mod.Name, mod.Checksum[:8], mod.Size))
+			hashDisplay := mod.Checksum
+			if len(hashDisplay) > 8 {
+				hashDisplay = hashDisplay[:8]
+			}
+			sb.WriteString(fmt.Sprintf("  - %s (%s, %d bytes)\n", mod.Name, hashDisplay, mod.Size))
 		}
 		sb.WriteString("\n")
 	}
@@ -236,9 +244,17 @@ func FormatComparisonResult(comparison ModComparison) string {
 	if len(comparison.Different) > 0 {
 		sb.WriteString("版本不同的Mod:\n")
 		for _, diff := range comparison.Different {
+			localHash := diff.Local.Checksum
+			if len(localHash) > 8 {
+				localHash = localHash[:8]
+			}
+			remoteHash := diff.Remote.Checksum
+			if len(remoteHash) > 8 {
+				remoteHash = remoteHash[:8]
+			}
 			sb.WriteString(fmt.Sprintf("  - %s:\n", diff.Name))
-			sb.WriteString(fmt.Sprintf("    本地: %s (%d bytes)\n", diff.Local.Checksum[:8], diff.Local.Size))
-			sb.WriteString(fmt.Sprintf("    远程: %s (%d bytes)\n", diff.Remote.Checksum[:8], diff.Remote.Size))
+			sb.WriteString(fmt.Sprintf("    本地: %s (%d bytes)\n", localHash, diff.Local.Size))
+			sb.WriteString(fmt.Sprintf("    远程: %s (%d bytes)\n", remoteHash, diff.Remote.Size))
 		}
 		sb.WriteString("\n")
 	}

@@ -20,6 +20,10 @@ run-signaling: build
 	@echo "Starting signaling server..."
 	@./dist/stardewl-signaling
 
+run-cli: build
+	@echo "Starting CLI application..."
+	@./dist/stardewl --interactive
+
 run-example: build
 	@echo "Starting example demo..."
 	@./dist/stardewl-demo
@@ -68,7 +72,8 @@ help:
 	@echo "  test         - Run tests"
 	@echo "  clean        - Clean build artifacts"
 	@echo "  run-signaling - Start signaling server"
-	@echo "  run-example  - Run example client"
+	@echo "  run-cli      - Run CLI application (interactive)"
+	@echo "  run-example  - Run example demo"
 	@echo "  deps         - Download dependencies"
 	@echo "  dev-setup    - Setup development environment"
 	@echo "  lint         - Run linter"
