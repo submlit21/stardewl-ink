@@ -31,6 +31,7 @@ var (
 type Connection struct {
 	conn     *websocket.Conn
 	roomID   string
+	clientID string
 	isHost   bool
 	lastSeen time.Time
 }
@@ -126,19 +127,57 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// 检查房间是否存在
+	mu.RLock()
+	room, roomExists := rooms[connectionID]
+	mu.RUnlock()
+	
+	if !roomExists {
+		sendError(conn, "Room not found")
+		return
+	}
+
+	// 如果是主机，检查是否已有主机
+	if joinMsg.IsHost {
+		mu.Lock()
+		if room.Host != nil {
+			mu.Unlock()
+			sendError(conn, "Room already has a host")
+			return
+		}
+		mu.Unlock()
+	}
+
+	// 生成唯一的客户端ID
+	clientID := fmt.Sprintf("%s-%d", connectionID, time.Now().UnixNano())
+
 	// 注册连接
 	connection := &Connection{
 		conn:     conn,
 		roomID:   connectionID,
+		clientID: clientID,
 		isHost:   joinMsg.IsHost,
 		lastSeen: time.Now(),
 	}
 
 	mu.Lock()
-	connections[connectionID] = connection
+	// 添加到全局连接映射
+	connections[clientID] = connection
+	
+	// 添加到房间
+	if joinMsg.IsHost {
+		room.Host = connection
+		log.Printf("Host connected to room %s (clientID: %s)\n", connectionID, clientID)
+	} else {
+		room.Clients[clientID] = connection
+		log.Printf("Client connected to room %s (clientID: %s)\n", connectionID, clientID)
+		
+		// 如果有主机，通知主机有新客户端
+		if room.Host != nil {
+			notifyHostNewClient(room.Host, clientID)
+		}
+	}
 	mu.Unlock()
-
-	log.Printf("Connection established: %s (host: %v)\n", connectionID, joinMsg.IsHost)
 
 	// 发送连接成功消息
 	successMsg := Message{
@@ -154,7 +193,7 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	for {
 		_, message, err := conn.ReadMessage()
 		if err != nil {
-			log.Printf("Connection %s closed: %v\n", connectionID, err)
+			log.Printf("Connection %s closed: %v\n", clientID, err)
 			break
 		}
 
@@ -171,9 +210,49 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 
 	// 清理连接
 	mu.Lock()
-	delete(connections, connectionID)
+	delete(connections, clientID)
+	
+	// 从房间中移除
+	if room, exists := rooms[connectionID]; exists {
+		if joinMsg.IsHost {
+			room.Host = nil
+			log.Printf("Host disconnected from room %s\n", connectionID)
+			
+			// 通知所有客户端主机已断开
+			for _, client := range room.Clients {
+				msg := Message{
+					Type: "host_disconnected",
+					Data: json.RawMessage(`{}`),
+				}
+				if err := client.conn.WriteJSON(msg); err != nil {
+					log.Printf("Failed to notify client about host disconnect: %v\n", err)
+				}
+			}
+		} else {
+			delete(room.Clients, clientID)
+			log.Printf("Client disconnected from room %s\n", connectionID)
+			
+			// 通知主机客户端已断开
+			if room.Host != nil {
+				msg := Message{
+					Type: "client_disconnected",
+					Data: json.RawMessage(fmt.Sprintf(`{"client_id": "%s"}`, clientID)),
+				}
+				if err := room.Host.conn.WriteJSON(msg); err != nil {
+					log.Printf("Failed to notify host about client disconnect: %v\n", err)
+				}
+			}
+		}
+		
+		// 如果房间为空，清理房间
+		if room.Host == nil && len(room.Clients) == 0 {
+			delete(rooms, connectionID)
+			log.Printf("Room %s cleaned up (empty)\n", connectionID)
+		}
+	}
+	
 	mu.Unlock()
-	log.Printf("Connection removed: %s\n", connectionID)
+	log.Printf("Connection removed: %s\n", clientID)
 }
 
 func handleMessage(conn *Connection, msg Message) {
@@ -252,12 +331,29 @@ func forwardToRoom(roomID string, sender *Connection, msg Message) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	for id, conn := range connections {
-		if id == roomID && conn != sender {
-			if err := conn.conn.WriteJSON(msg); err != nil {
-				log.Printf("Failed to forward message to %s: %v\n", id, err)
+	room, exists := rooms[roomID]
+	if !exists {
+		return
+	}
+
+	// 转发给房间内的所有其他连接
+	if sender.isHost {
+		// 如果是主机发送的，转发给所有客户端
+		for _, client := range room.Clients {
+			if client.clientID != sender.clientID {
+				if err := client.conn.WriteJSON(msg); err != nil {
+					log.Printf("Failed to forward message to client %s: %v\n", client.clientID, err)
+				}
 			}
 		}
+	} else {
+		// 如果是客户端发送的，转发给主机
+		if room.Host != nil && room.Host.clientID != sender.clientID {
+			if err := room.Host.conn.WriteJSON(msg); err != nil {
+				log.Printf("Failed to forward message to host %s: %v\n", room.Host.clientID, err)
+			}
+		}
+		// 也可以选择转发给其他客户端（如果需要P2P）
 	}
 }
 
@@ -265,12 +361,15 @@ func forwardToHost(roomID string, sender *Connection, msg Message) {
 	mu.RLock()
 	defer mu.RUnlock()
 
-	for id, conn := range connections {
-		if id == roomID && conn != sender && conn.isHost {
-			if err := conn.conn.WriteJSON(msg); err != nil {
-				log.Printf("Failed to forward message to host %s: %v\n", id, err)
-			}
-			break
+	room, exists := rooms[roomID]
+	if !exists {
+		return
+	}
+
+	// 转发给主机
+	if room.Host != nil && room.Host.clientID != sender.clientID {
+		if err := room.Host.conn.WriteJSON(msg); err != nil {
+			log.Printf("Failed to forward message to host %s: %v\n", room.Host.clientID, err)
 		}
 	}
 }
@@ -313,7 +412,7 @@ func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mu.RLock()
-	_, exists := connections[connectionID]
+	_, exists := rooms[connectionID]
 	mu.RUnlock()
 
 	if !exists {
@@ -370,6 +469,18 @@ func sendError(conn *websocket.Conn, errorMsg string) {
 	}
 }
 
+// notifyHostNewClient 通知主机有新客户端连接
+func notifyHostNewClient(host *Connection, clientID string) {
+	msg := Message{
+		Type: "client_connected",
+		Data: json.RawMessage(fmt.Sprintf(`{"client_id": "%s"}`, clientID)),
+	}
+	
+	if err := host.conn.WriteJSON(msg); err != nil {
+		log.Printf("Failed to notify host about new client: %v\n", err)
+	}
+}
+
 func cleanupConnections() {
 	ticker := time.NewTicker(5 * time.Minute)
 	defer ticker.Stop()
@@ -377,13 +488,42 @@ func cleanupConnections() {
 	for range ticker.C {
 		mu.Lock()
 		now := time.Now()
-		for id, conn := range connections {
+		
+		// 清理过期的连接
+		for clientID, conn := range connections {
 			if now.Sub(conn.lastSeen) > 10*time.Minute {
 				conn.conn.Close()
-				delete(connections, id)
-				log.Printf("Cleaned up stale connection: %s\n", id)
+				delete(connections, clientID)
+				
+				// 从房间中移除
+				if room, exists := rooms[conn.roomID]; exists {
+					if conn.isHost {
+						room.Host = nil
+						log.Printf("Removed host from room %s: %s\n", conn.roomID, clientID)
+					} else {
+						delete(room.Clients, clientID)
+						log.Printf("Removed client from room %s: %s\n", conn.roomID, clientID)
+					}
+					
+					// 如果房间为空，清理房间
+					if room.Host == nil && len(room.Clients) == 0 {
+						delete(rooms, conn.roomID)
+						log.Printf("Cleaned up empty room: %s\n", conn.roomID)
+					}
+				}
+				
+				log.Printf("Cleaned up stale connection: %s\n", clientID)
 			}
 		}
+		
+		// 清理过期的空房间
+		for roomID, room := range rooms {
+			if now.Sub(room.CreatedAt) > 30*time.Minute && room.Host == nil && len(room.Clients) == 0 {
+				delete(rooms, roomID)
+				log.Printf("Cleaned up expired empty room: %s\n", roomID)
+			}
+		}
+		
 		mu.Unlock()
 	}
 }
