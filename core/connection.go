@@ -54,6 +54,20 @@ func NewConnection(connectionID string, isHost bool, config ConnectionConfig) (*
 			conn.close()
 		}
 	})
+	
+	// 设置ICE候选回调
+	peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate == nil {
+			log.Println("ICE candidate gathering complete")
+			return
+		}
+		
+		log.Printf("ICE candidate found: %s:%d (%s)", 
+			candidate.Address, candidate.Port, candidate.Protocol)
+		
+		// 这里可以发送ICE候选到信令服务器
+		// 实际发送在P2PConnector中处理
+	})
 
 	// 如果是主机，创建数据通道
 	if isHost {

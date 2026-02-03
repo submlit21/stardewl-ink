@@ -277,6 +277,9 @@ func handleOffer(conn *Connection, data json.RawMessage) {
 		return
 	}
 
+	log.Printf("Forwarding offer from %s (host: %v) to room %s", 
+		conn.clientID, conn.isHost, conn.roomID)
+	
 	// 转发给房间内的其他客户端
 	forwardToRoom(conn.roomID, conn, Message{
 		Type: "offer",
@@ -291,6 +294,9 @@ func handleAnswer(conn *Connection, data json.RawMessage) {
 		return
 	}
 
+	log.Printf("Forwarding answer from %s (host: %v) to host in room %s", 
+		conn.clientID, conn.isHost, conn.roomID)
+	
 	// 转发给主机
 	forwardToHost(conn.roomID, conn, Message{
 		Type: "answer",
@@ -305,6 +311,9 @@ func handleICECandidate(conn *Connection, data json.RawMessage) {
 		return
 	}
 
+	log.Printf("Forwarding ICE candidate from %s (host: %v) in room %s", 
+		conn.clientID, conn.isHost, conn.roomID)
+	
 	// 转发给房间内的其他客户端
 	forwardToRoom(conn.roomID, conn, Message{
 		Type: "ice_candidate",

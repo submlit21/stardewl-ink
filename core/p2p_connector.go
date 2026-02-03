@@ -3,9 +3,9 @@ package core
 import (
 	"encoding/json"
 	"fmt"
+	"time"
 	"log"
 	"sync"
-	"time"
 
 	"github.com/pion/webrtc/v3"
 )
@@ -61,6 +61,29 @@ func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
 		modsPath:        config.ModsPath,
 		connected:       false,
 	}
+	
+	// 设置ICE候选回调
+	connection.peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate == nil {
+			log.Printf("ICE candidate gathering complete for %s", config.RoomID)
+			return
+		}
+		
+		candidateJSON, err := json.Marshal(candidate.ToJSON())
+		if err != nil {
+			log.Printf("Failed to marshal ICE candidate: %v", err)
+			return
+		}
+		
+		// 发送ICE候选到信令服务器
+		if err := signalingClient.SendMessage("ice_candidate", map[string]string{
+			"candidate": string(candidateJSON),
+		}); err != nil {
+			log.Printf("Failed to send ICE candidate: %v", err)
+		} else {
+			log.Printf("ICE candidate sent: %s:%d", candidate.Address, candidate.Port)
+		}
+	})
 
 	// 设置信令客户端回调
 	signalingClient.SetCallbacks(
@@ -78,11 +101,11 @@ func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
 
 // Start 启动P2P连接
 func (p *P2PConnector) Start() error {
-	// 等待信令连接建立
-	if !p.signalingClient.WaitForConnection(10 * time.Second) {
-		return fmt.Errorf("failed to establish signaling connection")
-	}
-
+	log.Printf("Starting P2P connection for room: %s (host: %v)", p.roomID, p.isHost)
+	
+	// 给信令连接一点时间建立
+	time.Sleep(2 * time.Second)
+	
 	log.Printf("Signaling connection established for room: %s", p.roomID)
 
 	// 如果是主机，创建并发送offer
@@ -104,6 +127,8 @@ func (p *P2PConnector) startAsHost() error {
 		return fmt.Errorf("failed to create offer: %w", err)
 	}
 
+	log.Printf("Offer created successfully, length: %d bytes", len(offer))
+	
 	// 发送offer到信令服务器
 	if err := p.signalingClient.SendMessage("offer", map[string]string{
 		"offer": offer,
