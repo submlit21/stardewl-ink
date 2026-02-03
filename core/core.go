@@ -1,6 +1,7 @@
 package core
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"time"
@@ -187,6 +188,7 @@ func (c *StardewlClient) StartAsHost() error {
 	}
 
 	log.Printf("Created offer for connection %s\n", c.connectionID)
+	_ = offer // 暂时不使用，在实际应用中通过信令服务器发送
 	
 	// 在实际应用中，这里应该通过信令服务器发送offer
 	// 为了简化，我们假设offer已经通过其他方式交换
@@ -212,6 +214,7 @@ func (c *StardewlClient) ConnectAsClient(offer string) error {
 	}
 
 	log.Printf("Created answer for connection %s\n", c.connectionID)
+	_ = answer // 暂时不使用，在实际应用中通过信令服务器发送
 	
 	// 在实际应用中，这里应该通过信令服务器发送answer
 	// 为了简化，我们假设answer已经通过其他方式交换
