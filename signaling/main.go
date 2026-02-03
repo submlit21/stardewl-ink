@@ -42,6 +42,8 @@ type RoomInfo struct {
 	CreatedAt time.Time
 	Host      *Connection
 	Clients   map[string]*Connection
+	// 缓存主机发送的消息，以便新连接的客户端能立即收到
+	PendingMessages []Message
 }
 
 // Message 信令消息
@@ -175,6 +177,14 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 		// 如果有主机，通知主机有新客户端
 		if room.Host != nil {
 			notifyHostNewClient(room.Host, clientID)
+		}
+		
+		// 发送缓存的pending消息给新客户端
+		log.Printf("Sending %d pending messages to new client", len(room.PendingMessages))
+		for _, msg := range room.PendingMessages {
+			if err := connection.conn.WriteJSON(msg); err != nil {
+				log.Printf("Failed to send pending message to client: %v", err)
+			}
 		}
 	}
 	mu.Unlock()
@@ -347,9 +357,18 @@ func forwardToRoom(roomID string, sender *Connection, msg Message) {
 
 	// 转发给房间内的所有其他连接
 	if sender.isHost {
-		// 如果是主机发送的，转发给所有客户端
-		for _, client := range room.Clients {
+		// 如果是主机发送的，缓存消息以便新客户端连接时能收到
+		room.PendingMessages = append(room.PendingMessages, msg)
+		log.Printf("Cached %s message from host in room %s (total cached: %d)", 
+			msg.Type, roomID, len(room.PendingMessages))
+		
+		// 转发给所有已连接的客户端
+		log.Printf("Forwarding %s from host to %d clients in room %s", 
+			msg.Type, len(room.Clients), roomID)
+		
+		for clientID, client := range room.Clients {
 			if client.clientID != sender.clientID {
+				log.Printf("  -> Sending to client %s", clientID)
 				if err := client.conn.WriteJSON(msg); err != nil {
 					log.Printf("Failed to forward message to client %s: %v\n", client.clientID, err)
 				}
@@ -357,7 +376,10 @@ func forwardToRoom(roomID string, sender *Connection, msg Message) {
 		}
 	} else {
 		// 如果是客户端发送的，转发给主机
+		log.Printf("Forwarding %s from client to host in room %s", msg.Type, roomID)
+		
 		if room.Host != nil && room.Host.clientID != sender.clientID {
+			log.Printf("  -> Sending to host %s", room.Host.clientID)
 			if err := room.Host.conn.WriteJSON(msg); err != nil {
 				log.Printf("Failed to forward message to host %s: %v\n", room.Host.clientID, err)
 			}
@@ -396,10 +418,11 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	mu.Lock()
 	// 只创建房间记录，不创建连接
 	rooms[connectionID] = &RoomInfo{
-		ID:        connectionID,
-		CreatedAt: time.Now(),
-		Host:      nil,
-		Clients:   make(map[string]*Connection),
+		ID:              connectionID,
+		CreatedAt:       time.Now(),
+		Host:            nil,
+		Clients:         make(map[string]*Connection),
+		PendingMessages: make([]Message, 0),
 	}
 	mu.Unlock()
 	
