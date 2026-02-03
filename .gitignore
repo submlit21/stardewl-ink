@@ -1,0 +1,42 @@
+# Binaries
+dist/
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Go
+go.sum
+*.test
+*.out
+coverage.txt
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Build artifacts
+*.a
+*.lib
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+
+# Config files (except examples)
+config/config.yaml
+config/config.local.yaml
+
+# Development
+.env
+.env.local
