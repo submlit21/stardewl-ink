@@ -256,3 +256,5 @@ func (c *Connection) IsConnected() bool {
 	}
 	return c.dataChannel.ReadyState() == webrtc.DataChannelStateOpen
 }
+// CreateOffer 创建Offer
+}

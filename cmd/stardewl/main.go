@@ -8,7 +8,6 @@ import (
 	"log"
 	"os"
 	"strings"
-	"time"
 
 	"github.com/submlit21/stardewl-ink/core"
 )
