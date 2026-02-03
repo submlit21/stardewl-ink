@@ -19,10 +19,10 @@ fi
 # 创建输出目录
 mkdir -p dist
 
-# 构建核心库（作为Go模块，不需要单独构建）
+# 检查核心库
 echo -e "${YELLOW}Checking core library...${NC}"
 cd core
-go test -c -o ../dist/core.test  # 构建测试二进制文件用于验证
+go test -run TestModScanning  # 运行一个简单测试验证库是否正常
 cd ..
 
 # 构建信令服务器
@@ -37,7 +37,7 @@ go build -o dist/stardewl-demo examples/simple_demo.go
 
 # 构建CLI应用
 echo -e "${YELLOW}Building CLI application...${NC}"
-go build -o dist/stardewl cmd/stardewl/main.go
+go build -o dist/stardewl ./cmd/stardewl
 
 echo -e "${GREEN}Build completed!${NC}"
 echo -e "Output files in ${YELLOW}dist/${NC}:"

@@ -13,8 +13,6 @@ test:
 clean:
 	@echo "Cleaning up..."
 	@rm -rf dist/
-	@rm -f core/*.test
-	@rm -f signaling/stardewl-signaling
 
 run-signaling: build
 	@echo "Starting signaling server..."
