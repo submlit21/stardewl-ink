@@ -89,11 +89,13 @@ func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
 	})
 
 	// 设置信令客户端回调
+	log.Printf("Setting signaling client callbacks for room: %s", config.RoomID)
 	signalingClient.SetCallbacks(
 		connector.handleSignalingMessage,
 		connector.handleSignalingConnected,
 		connector.handleSignalingError,
 	)
+	log.Printf("Signaling client callbacks set successfully")
 
 	// 设置WebRTC连接回调
 	connection.SetMessageHandler(connector.handleDataChannelMessage)
@@ -151,12 +153,17 @@ func (p *P2PConnector) startAsClient() error {
 
 // handleSignalingMessage 处理信令消息
 func (p *P2PConnector) handleSignalingMessage(msgType string, data []byte) {
+	log.Printf("📨 P2PConnector.handleSignalingMessage called! Type: %s, Data length: %d", msgType, len(data))
+	
 	switch msgType {
 	case "offer":
+		log.Printf("🎯 Processing offer message")
 		p.handleOffer(data)
 	case "answer":
+		log.Printf("🎯 Processing answer message")
 		p.handleAnswer(data)
 	case "ice_candidate":
+		log.Printf("🎯 Processing ICE candidate message")
 		p.handleICECandidate(data)
 	case "client_connected":
 		log.Printf("New client connected to room")

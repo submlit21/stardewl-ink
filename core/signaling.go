@@ -110,9 +110,11 @@ func (c *SignalingClient) handleMessages() {
 
 			// 转发给消息处理器
 			if c.onMessage != nil {
+				log.Printf("Calling onMessage callback for type: %s", msg.Type)
 				c.onMessage(msg.Type, msg.Data)
 			} else {
-				log.Printf("Warning: No message handler set for type: %s", msg.Type)
+				log.Printf("❌ CRITICAL: No message handler set for type: %s", msg.Type)
+				log.Printf("  Room: %s, IsHost: %v", c.roomID, c.isHost)
 			}
 		}()
 	}
