@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"sync"
 	"time"
@@ -18,7 +19,10 @@ var (
 		},
 	}
 
-	// 连接码到连接的映射
+	// 房间管理
+	rooms = make(map[string]*RoomInfo)
+	
+	// 连接管理
 	connections = make(map[string]*Connection)
 	mu          sync.RWMutex
 )
@@ -29,6 +33,14 @@ type Connection struct {
 	roomID   string
 	isHost   bool
 	lastSeen time.Time
+}
+
+// RoomInfo 表示一个房间的信息
+type RoomInfo struct {
+	ID        string
+	CreatedAt time.Time
+	Host      *Connection
+	Clients   map[string]*Connection
 }
 
 // Message 信令消息
@@ -269,8 +281,19 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 生成连接码（简化版，实际应该更复杂）
-	connectionID := generateConnectionCode()
+	// 生成唯一的连接码
+	connectionID := generateUniqueConnectionCode()
+	
+	// 预创建房间（等待主机连接）
+	mu.Lock()
+	// 只创建房间记录，不创建连接
+	rooms[connectionID] = &RoomInfo{
+		ID:        connectionID,
+		CreatedAt: time.Now(),
+		Host:      nil,
+		Clients:   make(map[string]*Connection),
+	}
+	mu.Unlock()
 	
 	response := ConnectionCodeMessage{
 		Code: connectionID,
@@ -279,7 +302,7 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(response)
 	
-	log.Printf("Room created: %s\n", connectionID)
+	log.Printf("Room created: %s (waiting for host)\n", connectionID)
 }
 
 func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
@@ -315,9 +338,25 @@ func handleHealth(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func generateConnectionCode() string {
-	// 简化版，实际应该使用更安全的随机生成
-	return fmt.Sprintf("%d", time.Now().UnixNano()%1000000)
+func generateUniqueConnectionCode() string {
+	// 生成6位数字连接码
+	rand.Seed(time.Now().UnixNano())
+	
+	for {
+		code := fmt.Sprintf("%06d", rand.Intn(1000000))
+		
+		// 检查是否已存在
+		mu.RLock()
+		_, exists := rooms[code]
+		mu.RUnlock()
+		
+		if !exists {
+			return code
+		}
+		
+		// 如果代码已存在，重试
+		time.Sleep(time.Millisecond)
+	}
 }
 
 func sendError(conn *websocket.Conn, errorMsg string) {

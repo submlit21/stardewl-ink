@@ -189,10 +189,14 @@ func runModsCheck(modsPath string, verbose bool) {
 func runAsHost(signalingURL, modsPath string, verbose bool) {
 	fmt.Println("=== 主机模式 ===")
 	
-	// 生成连接码（简化版，使用时间戳）
-	connectionID := fmt.Sprintf("%d", time.Now().UnixNano()%1000000)
+	// 从服务器获取连接码
+	connectionID, err := getConnectionCodeFromServer(signalingURL)
+	if err != nil {
+		fmt.Printf("获取连接码失败: %v\n", err)
+		os.Exit(1)
+	}
 	
-	fmt.Printf("连接码: %s\n", connectionID)
+	fmt.Printf("✅ 连接码: %s\n", connectionID)
 	fmt.Println("等待客户端连接...")
 	fmt.Println("(按 Ctrl+C 退出)")
 	

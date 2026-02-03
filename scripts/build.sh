@@ -24,10 +24,10 @@ echo -e "Platform: ${YELLOW}${CURRENT_OS}/${CURRENT_ARCH}${NC}"
 # 创建输出目录
 mkdir -p dist
 
-# 检查核心库
-echo -e "${YELLOW}Checking core library...${NC}"
+# 构建核心库
+echo -e "${YELLOW}Building core library...${NC}"
 cd core
-go build ./...  # 只构建，不运行测试
+go build ./...
 cd ..
 
 # 确定文件扩展名

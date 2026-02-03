@@ -60,13 +60,22 @@ func runHostInteractive(reader *bufio.Reader) {
 		signalingURL = "ws://localhost:8080/ws"
 	}
 	
-	fmt.Println("\n正在启动主机...")
+	fmt.Println("\n正在从服务器获取连接码...")
 	
-	// 这里可以调用实际的host逻辑
-	// 暂时显示模拟信息
+	// 尝试获取连接码
+	connectionID, err := getConnectionCodeFromServer(signalingURL)
+	if err != nil {
+		fmt.Printf("❌ 获取连接码失败: %v\n", err)
+		fmt.Println("请检查信令服务器是否运行")
+		fmt.Print("\n按 Enter 返回主菜单...")
+		reader.ReadString('\n')
+		return
+	}
+	
 	fmt.Println("✅ 主机已启动")
-	fmt.Println("📋 连接码: 123456")
+	fmt.Printf("📋 连接码: %s\n", connectionID)
 	fmt.Println("⏳ 等待客户端连接...")
+	fmt.Println("💡 将此连接码分享给朋友")
 	
 	fmt.Print("\n按 Enter 返回主菜单...")
 	reader.ReadString('\n')

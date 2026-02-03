@@ -1,183 +1,157 @@
 # 开发环境配置
 
-## 当前环境状态
+## 必需环境
 
-### 已安装
-- ✅ **GCC 13.3** - 已安装并配置为默认编译器
-- ✅ **Go 1.22** - 已安装（项目要求）
-- ✅ **Git** - 已安装
+### Go 开发环境
+- **Go 版本**: 1.22 或更高版本
+- **Go 代理**（中国用户推荐）:
+  ```bash
+  go env -w GOPROXY=https://goproxy.cn,direct
+  go env -w GOSUMDB=off
+  ```
 
-### 需要安装
-- ⏳ **Java JDK 21** - 安装中/需要安装
-- ⏳ **.NET 9.0** - 需要安装
-- ⏳ **Maven 3.9** - 需要安装
+### 构建工具
+- **GCC/Clang**: 用于编译（大多数系统已预装）
+- **Git**: 版本控制
 
-## 安装方法
+## 快速安装
 
-### 方法1：使用提供的脚本（推荐）
+### Ubuntu/Debian
 ```bash
-# 给予执行权限
-chmod +x setup-dev-env.sh
+# 安装 Go
+wget https://go.dev/dl/go1.22.2.linux-amd64.tar.gz
+sudo tar -C /usr/local -xzf go1.22.2.linux-amd64.tar.gz
+rm go1.22.2.linux-amd64.tar.gz
 
-# 运行配置脚本
-./setup-dev-env.sh
-
-# 重新加载环境变量
+# 添加到 PATH
+echo 'export PATH=$PATH:/usr/local/go/bin' >> ~/.bashrc
+echo 'export GOPATH=$HOME/go' >> ~/.bashrc
 source ~/.bashrc
-```
 
-### 方法2：手动安装
-
-#### 1. Java JDK 21
-```bash
-# Ubuntu/Debian
+# 安装 Git
 sudo apt-get update
-sudo apt-get install -y openjdk-21-jdk
-
-# 验证
-java --version
+sudo apt-get install -y git
 ```
 
-#### 2. .NET 9.0
+### macOS
 ```bash
-# 添加Microsoft仓库
-wget https://packages.microsoft.com/config/ubuntu/24.04/packages-microsoft-prod.deb
-sudo dpkg -i packages-microsoft-prod.deb
-rm packages-microsoft-prod.deb
+# 使用 Homebrew 安装
+brew install go git
 
-# 安装.NET SDK
-sudo apt-get update
-sudo apt-get install -y dotnet-sdk-9.0
-
-# 验证
-dotnet --version
+# 或从官网下载 Go 安装包
 ```
 
-#### 3. Maven 3.9
+### Windows
+1. 从 https://go.dev/dl/ 下载 Go 安装程序
+2. 从 https://git-scm.com/ 下载 Git
+3. 按照安装向导完成安装
+
+## 项目设置
+
+### 1. 克隆项目
 ```bash
-# Ubuntu/Debian
-sudo apt-get install -y maven
-
-# 验证
-mvn --version
-```
-
-## 环境变量配置
-
-将以下内容添加到 `~/.bashrc` 或 `~/.zshrc`：
-
-```bash
-# Java
-export JAVA_HOME=/usr/lib/jvm/java-21-openjdk-amd64
-export PATH=$JAVA_HOME/bin:$PATH
-
-# Go (如果使用脚本安装)
-export PATH=$PATH:/usr/local/go/bin
-export GOPATH=$HOME/go
-export PATH=$PATH:$GOPATH/bin
-
-# Go 代理（中国用户）
-export GOPROXY=https://goproxy.cn,direct
-export GOSUMDB=off
-
-# Maven
-export MAVEN_HOME=/usr/share/maven
-export PATH=$MAVEN_HOME/bin:$PATH
-```
-
-## 项目特定要求
-
-### Go 版本
-- **最低**: Go 1.22
-- **推荐**: Go 1.22.2+
-- **已验证**: Go 1.22 (当前环境), Go 1.25.5 (你的环境)
-
-### 构建要求
-```bash
-# 验证构建环境
+git clone git@github.com:submlit21/stardewl-ink.git
 cd stardewl-ink
+```
+
+### 2. 下载依赖
+```bash
+go mod download
+```
+
+### 3. 构建项目
+```bash
+# 构建当前平台
 make build
 
-# 如果遇到权限问题
-chmod +x scripts/build.sh
+# 或交叉编译（从 Linux 构建 Windows 版本）
+make cross-build-windows
 ```
 
-### 网络要求
-- **GitHub访问**: 需要访问 `github.com` 拉取代码
-- **Go模块**: 需要访问 `proxy.golang.org` 或配置镜像
-- **.NET NuGet**: 需要访问 `nuget.org`
+### 4. 运行
+```bash
+# 启动信令服务器（需要先运行）
+./dist/stardewl-signaling
+
+# 运行 CLI 应用
+./dist/stardewl --interactive
+```
+
+## 验证安装
+
+```bash
+# 检查版本
+go version
+git --version
+
+# 验证项目构建
+make test-build  # 只构建不运行测试
+```
 
 ## 故障排除
 
-### 常见问题
-
-#### 1. Go模块下载失败
+### Go 模块下载失败
 ```bash
 # 设置国内镜像
 go env -w GOPROXY=https://goproxy.cn,direct
 go env -w GOSUMDB=off
 
-# 清理并重试
+# 清理缓存
 go clean -modcache
 go mod download
 ```
 
-#### 2. 权限问题
+### 构建失败
 ```bash
-# 修复脚本权限
-chmod +x scripts/*.sh
-
-# 修复构建输出权限
-sudo chown -R $(whoami) dist/
-```
-
-#### 3. 依赖冲突
-```bash
-# 更新所有依赖
-go get -u ./...
-go mod tidy
-
-# 清理构建缓存
+# 清理并重新构建
 make clean
+make build
+
+# 或直接使用 Go 构建
+go build -o dist/stardewl ./cmd/stardewl
 ```
 
-#### 4. 端口冲突（信令服务器）
+### 端口冲突
 ```bash
-# 检查端口占用
+# 信令服务器默认使用 8080 端口
+# 如果端口被占用，可以修改代码或停止占用进程
 sudo lsof -i :8080
-
-# 使用不同端口
-./dist/stardewl-signaling -port=9090
+sudo kill -9 <PID>
 ```
 
-## 验证安装
+## 开发工作流
 
-运行验证脚本：
+1. **修改代码**
+2. **构建测试**: `make build`
+3. **运行测试**: `./dist/stardewl --interactive`
+4. **提交更改**: `git add . && git commit -m "message" && git push`
+
+## 生产部署
+
+### 信令服务器
 ```bash
-# 检查所有组件
-./setup-dev-env.sh --check
+# 构建生产版本
+GOOS=linux GOARCH=amd64 go build -o stardewl-signaling ./signaling
 
-# 或手动检查
-gcc --version
-java --version
-dotnet --version
-mvn --version
-go version
-git --version
+# 使用 systemd 服务
+sudo cp stardewl-signaling /usr/local/bin/
+sudo systemctl enable stardewl-signaling
+sudo systemctl start stardewl-signaling
 ```
 
-## 下一步
+### 客户端分发
+```bash
+# 构建所有平台
+make cross-build-all
 
-环境配置完成后：
-1. 克隆项目：`git clone git@github.com:submlit21/stardewl-ink.git`
-2. 进入目录：`cd stardewl-ink`
-3. 构建项目：`make build`
-4. 测试运行：`./dist/stardewl --interactive`
+# 打包分发
+cd dist/windows && zip -r stardewl-windows.zip *.exe
+cd ../macos && tar -czf stardewl-macos.tar.gz *
+cd ../linux && tar -czf stardewl-linux.tar.gz *
+```
 
 ## 支持
 
-如果遇到安装问题：
-1. 检查网络连接
-2. 查看具体错误信息
-3. 尝试手动安装单个组件
-4. 联系维护者获取帮助
+- 项目文档: `docs/` 目录
+- 问题报告: GitHub Issues
+- 快速开始: `QUICKSTART.md`

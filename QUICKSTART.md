@@ -49,15 +49,20 @@ make run-signaling
 - 健康检查：`curl http://localhost:8080/health`
 - 创建房间：`curl -X POST http://localhost:8080/create`
 
-## 5. 运行示例程序
+## 5. 使用CLI应用
 
 ```bash
-# 运行演示程序
-go run examples/simple_demo.go
+# 交互模式（推荐新手）
+./dist/stardewl --interactive
 
-# 或构建后运行
-go build -o dist/stardewl-demo examples/simple_demo.go
-./dist/stardewl-demo
+# 作为主机运行（从服务器获取连接码）
+./dist/stardewl --host
+
+# 作为客户端运行（使用连接码加入）
+./dist/stardewl --join=123456
+
+# 或使用Makefile
+make run-cli
 ```
 
 ## 6. 测试完整流程

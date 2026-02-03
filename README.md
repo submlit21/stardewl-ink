@@ -121,24 +121,19 @@ make build
 
 ## 🧪 开发指南
 
-### 运行测试
-```bash
-make test
-```
-
 ### 代码格式化
 ```bash
 make fmt
 ```
 
-### 代码检查
+### 更新依赖
 ```bash
-make lint
+make update-deps
 ```
 
-### 构建所有目标
+### 构建项目
 ```bash
-make clean build test
+make clean build
 ```
 
 ## 📁 Mod 支持

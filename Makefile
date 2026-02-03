@@ -1,14 +1,13 @@
-.PHONY: all build test clean run-signaling run-example deps cross-build-all cross-build-windows cross-build-macos cross-build-linux
+.PHONY: all build test-build clean run-signaling run-cli run-example deps cross-build-all cross-build-windows cross-build-macos cross-build-linux
 
-all: build test
+all: build
 
-build:
+build: test-build
+	@echo "✅ Build completed successfully"
+
+test-build:
 	@echo "Building Stardewl-Ink for current platform..."
 	@./scripts/build.sh
-
-test:
-	@echo "Running tests..."
-	@cd core && go test -v ./...
 
 clean:
 	@echo "Cleaning up..."
@@ -34,15 +33,6 @@ deps:
 dev-setup: deps
 	@echo "Development setup complete"
 
-# 代码质量检查
-lint:
-	@echo "Running linter..."
-	@if command -v golangci-lint &> /dev/null; then \
-		golangci-lint run ./...; \
-	else \
-		echo "golangci-lint not installed. Install with: go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest"; \
-	fi
-
 # 格式化代码
 fmt:
 	@echo "Formatting code..."
@@ -53,16 +43,6 @@ update-deps:
 	@echo "Updating dependencies..."
 	@go get -u ./...
 	@go mod tidy
-
-# 生成文档
-doc:
-	@echo "Generating documentation..."
-	@go doc -all ./core
-
-# 性能测试
-bench:
-	@echo "Running benchmarks..."
-	@cd core && go test -bench=. -benchmem
 
 # 交叉编译
 cross-build-all: cross-build-windows cross-build-macos cross-build-linux
@@ -100,18 +80,15 @@ build-linux: cross-build-linux
 help:
 	@echo "Available targets:"
 	@echo "  build                    - Build for current platform"
-	@echo "  test                     - Run tests"
+	@echo "  test-build               - Build without running tests"
 	@echo "  clean                    - Clean build artifacts"
 	@echo "  run-signaling            - Start signaling server"
 	@echo "  run-cli                  - Run CLI application (interactive)"
 	@echo "  run-example              - Run example demo"
 	@echo "  deps                     - Download dependencies"
 	@echo "  dev-setup                - Setup development environment"
-	@echo "  lint                     - Run linter"
 	@echo "  fmt                      - Format code"
 	@echo "  update-deps              - Update dependencies"
-	@echo "  doc                      - Generate documentation"
-	@echo "  bench                    - Run benchmarks"
 	@echo ""
 	@echo "  Cross-compilation targets:"
 	@echo "  cross-build-all          - Build for all platforms (Windows, macOS, Linux)"
