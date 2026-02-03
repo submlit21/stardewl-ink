@@ -179,12 +179,20 @@ func handleWebSocket(w http.ResponseWriter, r *http.Request) {
 			notifyHostNewClient(room.Host, clientID)
 		}
 		
-		// 发送缓存的pending消息给新客户端
+		// 发送缓存的pending消息给新客户端（分批发送，避免WebSocket过载）
 		log.Printf("Sending %d pending messages to new client", len(room.PendingMessages))
-		for _, msg := range room.PendingMessages {
+		
+		// 分批发送，每条消息之间有点延迟
+		for i, msg := range room.PendingMessages {
+			log.Printf("  -> Sending pending message %d/%d: %s", i+1, len(room.PendingMessages), msg.Type)
+			
 			if err := connection.conn.WriteJSON(msg); err != nil {
-				log.Printf("Failed to send pending message to client: %v", err)
+				log.Printf("Failed to send pending message %d to client: %v", i+1, err)
+				break
 			}
+			
+			// 小延迟，避免WebSocket过载
+			time.Sleep(50 * time.Millisecond)
 		}
 	}
 	mu.Unlock()

@@ -116,6 +116,37 @@ func (c *SignalingClient) handleMessages() {
 			}
 		}()
 	}
+
+		// 解析消息
+		var msg struct {
+			Type string          `json:"type"`
+			Data json.RawMessage `json:"data"`
+		}
+		
+		if err := json.Unmarshal(message, &msg); err != nil {
+			log.Printf("Failed to parse signaling message: %v", err)
+			continue
+		}
+
+		log.Printf("Signaling client received message type: %s, data length: %d", 
+			msg.Type, len(msg.Data))
+
+		// 处理连接成功消息
+		if msg.Type == "connected" {
+			log.Printf("Connected to signaling server for room: %s", c.roomID)
+			if c.onConnected != nil {
+				c.onConnected()
+			}
+			continue
+		}
+
+		// 转发给消息处理器
+		if c.onMessage != nil {
+			c.onMessage(msg.Type, msg.Data)
+		} else {
+			log.Printf("Warning: No message handler set for type: %s", msg.Type)
+		}
+	}
 }
 
 // SendMessage 发送消息到信令服务器

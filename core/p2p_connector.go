@@ -35,10 +35,12 @@ type P2PConfig struct {
 
 // NewP2PConnector 创建新的P2P连接器
 func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
-	// 创建信令客户端
-	signalingClient, err := NewSignalingClient(config.SignalingURL, config.RoomID, config.IsHost)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create signaling client: %w", err)
+	// 先创建P2P连接器（但不立即创建信令客户端）
+	connector := &P2PConnector{
+		roomID:    config.RoomID,
+		isHost:    config.IsHost,
+		modsPath:  config.ModsPath,
+		connected: false,
 	}
 
 	// 创建WebRTC连接配置
@@ -49,18 +51,19 @@ func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
 	// 创建WebRTC连接
 	connection, err := NewConnection(config.RoomID, config.IsHost, connConfig)
 	if err != nil {
-		signalingClient.Close()
 		return nil, fmt.Errorf("failed to create WebRTC connection: %w", err)
 	}
+	
+	connector.connection = connection
 
-	connector := &P2PConnector{
-		signalingClient: signalingClient,
-		connection:      connection,
-		roomID:          config.RoomID,
-		isHost:          config.IsHost,
-		modsPath:        config.ModsPath,
-		connected:       false,
+	// 现在创建信令客户端（确保回调已经设置）
+	signalingClient, err := NewSignalingClient(config.SignalingURL, config.RoomID, config.IsHost)
+	if err != nil {
+		connection.Close()
+		return nil, fmt.Errorf("failed to create signaling client: %w", err)
 	}
+	
+	connector.signalingClient = signalingClient
 	
 	// 设置ICE候选回调
 	connection.peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
@@ -182,37 +185,56 @@ func (p *P2PConnector) handleOffer(data []byte) {
 		return
 	}
 
-	log.Printf("Client received offer from host")
+	log.Printf("✅ Client received offer from host (data length: %d bytes)", len(data))
 	
 	var offerData struct {
 		Offer string `json:"offer"`
 	}
 	if err := json.Unmarshal(data, &offerData); err != nil {
-		log.Printf("Failed to parse offer: %v", err)
+		log.Printf("❌ Failed to parse offer: %v", err)
+		log.Printf("Offer data (first 200 chars): %s", string(data)[:min(200, len(data))])
+		return
+	}
+	
+	if offerData.Offer == "" {
+		log.Printf("❌ Empty offer received")
 		return
 	}
 
+	log.Printf("Setting remote description (offer length: %d chars)", len(offerData.Offer))
+	
 	// 设置远程描述
 	if err := p.connection.SetRemoteDescription(offerData.Offer); err != nil {
-		log.Printf("Failed to set remote description: %v", err)
+		log.Printf("❌ Failed to set remote description: %v", err)
 		return
 	}
 
+	log.Printf("Creating answer...")
+	
 	// 创建answer
 	answer, err := p.connection.CreateAnswer()
 	if err != nil {
-		log.Printf("Failed to create answer: %v", err)
+		log.Printf("❌ Failed to create answer: %v", err)
 		return
 	}
 
+	log.Printf("Sending answer (length: %d chars)", len(answer))
+	
 	// 发送answer到信令服务器
 	if err := p.signalingClient.SendMessage("answer", map[string]string{
 		"answer": answer,
 	}); err != nil {
-		log.Printf("Failed to send answer: %v", err)
+		log.Printf("❌ Failed to send answer: %v", err)
+	} else {
+		log.Printf("✅ Answer sent to signaling server")
 	}
+}
 
-	log.Printf("Answer sent to signaling server")
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // handleAnswer 处理收到的Answer
