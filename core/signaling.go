@@ -21,6 +21,15 @@ type SignalingClient struct {
 	onError       func(err error)
 	mu            sync.RWMutex
 	closed        bool
+	// 消息队列：在回调设置前缓存消息
+	messageQueue  []queuedMessage
+	queueMu       sync.RWMutex
+}
+
+// queuedMessage 队列中的消息
+type queuedMessage struct {
+	msgType string
+	data    []byte
 }
 
 // NewSignalingClient 创建新的信令客户端
@@ -32,11 +41,12 @@ func NewSignalingClient(url, roomID string, isHost bool) (*SignalingClient, erro
 	}
 
 	client := &SignalingClient{
-		conn:    conn,
-		url:     url,
-		roomID:  roomID,
-		isHost:  isHost,
-		closed:  false,
+		conn:         conn,
+		url:          url,
+		roomID:       roomID,
+		isHost:       isHost,
+		closed:       false,
+		messageQueue: make([]queuedMessage, 0),
 	}
 
 	// 发送加入消息
@@ -109,13 +119,30 @@ func (c *SignalingClient) handleMessages() {
 			}
 
 			// 转发给消息处理器
+			c.queueMu.Lock()
 			if c.onMessage != nil {
 				log.Printf("Calling onMessage callback for type: %s", msg.Type)
 				c.onMessage(msg.Type, msg.Data)
+				
+				// 如果有队列中的消息，也处理它们
+				if len(c.messageQueue) > 0 {
+					log.Printf("Processing %d queued messages", len(c.messageQueue))
+					for _, qm := range c.messageQueue {
+						log.Printf("  -> Processing queued message: %s", qm.msgType)
+						c.onMessage(qm.msgType, qm.data)
+					}
+					// 清空队列
+					c.messageQueue = make([]queuedMessage, 0)
+				}
 			} else {
-				log.Printf("❌ CRITICAL: No message handler set for type: %s", msg.Type)
-				log.Printf("  Room: %s, IsHost: %v", c.roomID, c.isHost)
+				// 回调还没有设置，将消息加入队列
+				log.Printf("📦 Queueing message (callback not set yet): %s", msg.Type)
+				c.messageQueue = append(c.messageQueue, queuedMessage{
+					msgType: msg.Type,
+					data:    msg.Data,
+				})
 			}
+			c.queueMu.Unlock()
 		}()
 	}
 }
@@ -156,9 +183,25 @@ func (c *SignalingClient) SetCallbacks(
 	onConnected func(),
 	onError func(err error),
 ) {
+	c.queueMu.Lock()
+	defer c.queueMu.Unlock()
+	
 	c.onMessage = onMessage
 	c.onConnected = onConnected
 	c.onError = onError
+	
+	// 如果有队列中的消息，立即处理它们
+	if onMessage != nil && len(c.messageQueue) > 0 {
+		log.Printf("🔄 Processing %d queued messages after setting callbacks", len(c.messageQueue))
+		for _, qm := range c.messageQueue {
+			log.Printf("  -> Processing queued: %s", qm.msgType)
+			onMessage(qm.msgType, qm.data)
+		}
+		// 清空队列
+		c.messageQueue = make([]queuedMessage, 0)
+	}
+	
+	log.Printf("✅ Callbacks set successfully for room: %s", c.roomID)
 }
 
 // WaitForConnection 等待连接建立
