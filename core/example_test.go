@@ -67,7 +67,7 @@ func TestModComparison(t *testing.T) {
 	fmt.Println(formatted)
 }
 
-func ExampleClientUsage() {
+func ExampleNewStardewlClient() {
 	// 这是一个使用示例
 	
 	// 创建客户端配置

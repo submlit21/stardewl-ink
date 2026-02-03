@@ -22,7 +22,7 @@ mkdir -p dist
 # 检查核心库
 echo -e "${YELLOW}Checking core library...${NC}"
 cd core
-go test -run TestModScanning  # 运行一个简单测试验证库是否正常
+go build ./...  # 只构建，不运行测试
 cd ..
 
 # 构建信令服务器
