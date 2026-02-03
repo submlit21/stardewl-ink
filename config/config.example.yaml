@@ -1,0 +1,114 @@
+# Stardewl-Ink 配置示例
+
+# 信令服务器配置
+signaling:
+  # 服务器地址
+  host: "0.0.0.0"
+  port: 8080
+  
+  # WebSocket路径
+  ws_path: "/ws"
+  
+  # 允许的来源（生产环境应该限制）
+  allowed_origins:
+    - "*"
+  
+  # 心跳间隔（秒）
+  heartbeat_interval: 30
+  
+  # 连接超时（秒）
+  connection_timeout: 300
+
+# WebRTC配置
+webrtc:
+  # ICE服务器配置
+  ice_servers:
+    - urls:
+        - "stun:stun.l.google.com:19302"
+        - "stun:stun1.l.google.com:19302"
+        - "stun:stun2.l.google.com:19302"
+        - "stun:stun3.l.google.com:19302"
+        - "stun:stun4.l.google.com:19302"
+  
+  # TURN服务器（如果需要）
+  # turn_servers:
+  #   - urls:
+  #       - "turn:example.com:3478"
+  #     username: "username"
+  #     credential: "password"
+  
+  # 数据通道配置
+  data_channel:
+    # 数据通道标签
+    label: "stardewl"
+    
+    # 是否有序
+    ordered: true
+    
+    # 最大重传次数
+    max_retransmits: 0
+    
+    # 协议
+    protocol: ""
+
+# 客户端配置
+client:
+  # 默认Mods路径（留空则自动检测）
+  default_mods_path: ""
+  
+  # 自动扫描Mods
+  auto_scan_mods: true
+  
+  # 扫描间隔（秒）
+  scan_interval: 60
+  
+  # 显示Mod差异阈值（字节）
+  diff_threshold: 1024
+  
+  # 日志级别
+  log_level: "info"
+  
+  # 用户界面语言
+  language: "zh-CN"
+
+# 日志配置
+logging:
+  # 日志文件路径
+  file: "stardewl-ink.log"
+  
+  # 最大日志文件大小（MB）
+  max_size: 10
+  
+  # 保留的旧日志文件数量
+  max_backups: 5
+  
+  # 日志文件保留天数
+  max_age: 30
+  
+  # 是否压缩旧日志
+  compress: true
+
+# 开发配置
+development:
+  # 是否启用调试模式
+  debug: false
+  
+  # 是否启用性能分析
+  profile: false
+  
+  # 性能分析端口
+  profile_port: 6060
+
+# 跨平台配置
+platform:
+  windows:
+    # Windows特定配置
+    ui_framework: "winui3"  # 或 "wpf"
+    
+  macos:
+    # macOS特定配置
+    ui_framework: "swiftui"
+    
+  linux:
+    # Linux特定配置
+    ui_framework: "gtk4"  # 或 "qt"
