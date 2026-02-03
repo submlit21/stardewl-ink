@@ -19,10 +19,10 @@ fi
 # 创建输出目录
 mkdir -p dist
 
-# 构建核心库
-echo -e "${YELLOW}Building core library...${NC}"
+# 构建核心库（作为Go模块，不需要单独构建）
+echo -e "${YELLOW}Checking core library...${NC}"
 cd core
-go build -o ../dist/libstardewl-core.a -buildmode=c-archive
+go test -c -o ../dist/core.test  # 构建测试二进制文件用于验证
 cd ..
 
 # 构建信令服务器
@@ -31,57 +31,9 @@ cd signaling
 go build -o ../dist/stardewl-signaling
 cd ..
 
-# 构建示例客户端
-echo -e "${YELLOW}Building example client...${NC}"
-cat > examples/simple_client.go << 'EOF'
-package main
-
-import (
-	"fmt"
-	"log"
-	"time"
-
-	"github.com/submlit21/stardewl-ink/core"
-)
-
-func main() {
-	config := core.ClientConfig{
-		SignalingURL: "ws://localhost:8080/ws",
-		ConnectionID: "demo-connection",
-		IsHost:       true,
-		ICEServers:   core.GetDefaultICEServers(),
-	}
-
-	client, err := core.NewStardewlClient(config)
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer client.Close()
-
-	client.SetModsCheckedHandler(func(comparison core.ModComparison) {
-		fmt.Println("\n=== Mods Comparison ===")
-		fmt.Println(core.FormatComparisonResult(comparison))
-	})
-
-	client.SetConnectedHandler(func() {
-		fmt.Println("✓ Connected to peer")
-	})
-
-	client.SetDisconnectedHandler(func() {
-		fmt.Println("✗ Disconnected from peer")
-	})
-
-	fmt.Println("Starting Stardewl-Ink client...")
-	fmt.Println("Press Ctrl+C to exit")
-
-	// 保持运行
-	for {
-		time.Sleep(1 * time.Second)
-	}
-}
-EOF
-
-go build -o dist/stardewl-example examples/simple_client.go
+# 构建示例演示程序
+echo -e "${YELLOW}Building example demo...${NC}"
+go build -o dist/stardewl-demo examples/simple_demo.go
 
 echo -e "${GREEN}Build completed!${NC}"
 echo -e "Output files in ${YELLOW}dist/${NC}:"
@@ -89,5 +41,5 @@ ls -la dist/
 
 echo -e "\n${YELLOW}To start the signaling server:${NC}"
 echo -e "  ./dist/stardewl-signaling"
-echo -e "\n${YELLOW}To run the example client:${NC}"
-echo -e "  ./dist/stardewl-example"
+echo -e "\n${YELLOW}To run the example demo:${NC}"
+echo -e "  ./dist/stardewl-demo"

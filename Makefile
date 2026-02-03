@@ -21,8 +21,8 @@ run-signaling: build
 	@./dist/stardewl-signaling
 
 run-example: build
-	@echo "Starting example client..."
-	@./dist/stardewl-example
+	@echo "Starting example demo..."
+	@./dist/stardewl-demo
 
 deps:
 	@echo "Downloading dependencies..."
