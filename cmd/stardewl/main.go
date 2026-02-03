@@ -5,6 +5,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"net/http"
 	"log"
 	"os"
 	"strings"
@@ -269,8 +270,26 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 	}
 	
 	fmt.Printf("连接码: %s\n", connectionID)
+	
+	// 如果没有指定信令服务器URL，使用默认值
+	if signalingURL == "" {
+		signalingURL = "ws://localhost:8080/ws"
+	}
+	
+	fmt.Printf("信令服务器: %s\n", signalingURL)
 	fmt.Println("正在连接到主机...")
 	fmt.Println("(按 Ctrl+C 退出)")
+	
+	// 测试服务器连接
+	fmt.Println("测试服务器连接...")
+	resp, err := http.Get(strings.Replace(signalingURL, "ws://", "http://", 1))
+	if err != nil {
+		fmt.Printf("❌ 无法连接到信令服务器: %v\n", err)
+		fmt.Println("请确保信令服务器正在运行: ./dist/stardewl-signaling")
+		os.Exit(1)
+	}
+	resp.Body.Close()
+	fmt.Println("✅ 信令服务器可访问")
 	
 	// 创建P2P配置
 	config := core.P2PConfig{

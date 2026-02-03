@@ -34,12 +34,30 @@ type queuedMessage struct {
 
 // NewSignalingClient 创建新的信令客户端
 func NewSignalingClient(url, roomID string, isHost bool) (*SignalingClient, error) {
-	// 建立WebSocket连接
-	conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+	log.Printf("🔗 Connecting to signaling server: %s (room: %s, host: %v)", url, roomID, isHost)
+	
+	// 建立WebSocket连接（带重试）
+	var conn *websocket.Conn
+	var err error
+	
+	for i := 0; i < 3; i++ {
+		conn, _, err = websocket.DefaultDialer.Dial(url, nil)
+		if err == nil {
+			break
+		}
+		
+		log.Printf("⚠️  Connection attempt %d failed: %v", i+1, err)
+		if i < 2 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+	
 	if err != nil {
-		return nil, fmt.Errorf("failed to connect to signaling server: %w", err)
+		return nil, fmt.Errorf("failed to connect to signaling server after 3 attempts: %w", err)
 	}
 
+	log.Printf("✅ WebSocket connection established to signaling server")
+	
 	client := &SignalingClient{
 		conn:         conn,
 		url:          url,
@@ -55,11 +73,14 @@ func NewSignalingClient(url, roomID string, isHost bool) (*SignalingClient, erro
 		"is_host":       isHost,
 	}
 	
+	log.Printf("📤 Sending join message for room: %s", roomID)
 	if err := conn.WriteJSON(joinMsg); err != nil {
 		conn.Close()
 		return nil, fmt.Errorf("failed to send join message: %w", err)
 	}
 
+	log.Printf("✅ Join message sent successfully")
+	
 	// 启动消息处理协程
 	go client.handleMessages()
 
