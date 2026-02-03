@@ -200,63 +200,60 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 	fmt.Println("等待客户端连接...")
 	fmt.Println("(按 Ctrl+C 退出)")
 	
-	// 创建客户端配置
-	config := core.ClientConfig{
+	// 创建P2P配置
+	config := core.P2PConfig{
 		SignalingURL: signalingURL,
-		ConnectionID: connectionID,
+		RoomID:       connectionID,
 		IsHost:       true,
 		ModsPath:     modsPath,
 		ICEServers:   core.GetDefaultICEServers(),
 	}
 	
-	client, err := core.NewStardewlClient(config)
+	// 创建P2P连接器
+	connector, err := core.NewP2PConnector(config)
 	if err != nil {
-		fmt.Printf("创建客户端失败: %v\n", err)
+		fmt.Printf("创建P2P连接器失败: %v\n", err)
 		os.Exit(1)
 	}
-	defer client.Close()
+	defer connector.Close()
 	
 	// 设置回调
-	client.SetModsCheckedHandler(func(comparison core.ModComparison) {
-		fmt.Println("\n" + strings.Repeat("=", 50))
-		fmt.Println("Mods对比结果:")
-		fmt.Println(core.FormatComparisonResult(comparison))
-		fmt.Println(strings.Repeat("=", 50))
-		
-		// 如果有差异，提示用户
-		if len(comparison.OnlyInLocal) > 0 || 
-		   len(comparison.OnlyInRemote) > 0 || 
-		   len(comparison.Different) > 0 {
-			fmt.Println("\n⚠️  发现Mod差异！")
-			fmt.Println("请确保双方Mod一致后再开始游戏。")
-		} else if len(comparison.Same) > 0 {
-			fmt.Println("\n✅ 所有Mod一致，可以开始游戏！")
-		}
-	})
+	connector.SetCallbacks(
+		func(comparison core.ModComparison) {
+			fmt.Println("\n" + strings.Repeat("=", 50))
+			fmt.Println("Mods对比结果:")
+			fmt.Println(core.FormatComparisonResult(comparison))
+			fmt.Println(strings.Repeat("=", 50))
+			
+			// 如果有差异，提示用户
+			if len(comparison.OnlyInLocal) > 0 || 
+			   len(comparison.OnlyInRemote) > 0 || 
+			   len(comparison.Different) > 0 {
+				fmt.Println("\n⚠️  发现Mod差异！")
+				fmt.Println("请确保双方Mod一致后再开始游戏。")
+			} else if len(comparison.Same) > 0 {
+				fmt.Println("\n✅ 所有Mod一致，可以开始游戏！")
+			}
+		},
+		func() {
+			fmt.Println("\n✅ 客户端已连接")
+			fmt.Println("正在交换Mod信息...")
+			
+			// 发送Mod列表
+			if err := connector.SendModsList(); err != nil {
+				fmt.Printf("发送Mod列表失败: %v\n", err)
+			}
+		},
+		func() {
+			fmt.Println("\n❌ 客户端断开连接")
+		},
+	)
 	
-	client.SetConnectedHandler(func() {
-		fmt.Println("\n✅ 客户端已连接")
-		fmt.Println("正在交换Mod信息...")
-		
-		// 发送Mod列表
-		if err := client.SendModsList(); err != nil {
-			fmt.Printf("发送Mod列表失败: %v\n", err)
-		}
-	})
-	
-	client.SetDisconnectedHandler(func() {
-		fmt.Println("\n❌ 客户端断开连接")
-		os.Exit(0)
-	})
-	
-	// 作为主机启动
-	if err := client.StartAsHost(); err != nil {
-		fmt.Printf("启动主机失败: %v\n", err)
+	// 启动P2P连接
+	if err := connector.Start(); err != nil {
+		fmt.Printf("启动P2P连接失败: %v\n", err)
 		os.Exit(1)
 	}
-	
-	// 启动心跳
-	client.StartHeartbeat(30 * time.Second)
 	
 	// 等待用户中断
 	waitForInterrupt()
@@ -276,51 +273,54 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 	fmt.Println("正在连接到主机...")
 	fmt.Println("(按 Ctrl+C 退出)")
 	
-	// 创建客户端配置
-	config := core.ClientConfig{
+	// 创建P2P配置
+	config := core.P2PConfig{
 		SignalingURL: signalingURL,
-		ConnectionID: connectionID,
+		RoomID:       connectionID,
 		IsHost:       false,
 		ModsPath:     modsPath,
 		ICEServers:   core.GetDefaultICEServers(),
 	}
 	
-	client, err := core.NewStardewlClient(config)
+	// 创建P2P连接器
+	connector, err := core.NewP2PConnector(config)
 	if err != nil {
-		fmt.Printf("创建客户端失败: %v\n", err)
+		fmt.Printf("创建P2P连接器失败: %v\n", err)
 		os.Exit(1)
 	}
-	defer client.Close()
+	defer connector.Close()
 	
 	// 设置回调
-	client.SetModsCheckedHandler(func(comparison core.ModComparison) {
-		fmt.Println("\n" + strings.Repeat("=", 50))
-		fmt.Println("Mods对比结果:")
-		fmt.Println(core.FormatComparisonResult(comparison))
-		fmt.Println(strings.Repeat("=", 50))
-		
-		// 如果有差异，提示用户
-		if len(comparison.OnlyInLocal) > 0 || 
-		   len(comparison.OnlyInRemote) > 0 || 
-		   len(comparison.Different) > 0 {
-			fmt.Println("\n⚠️  发现Mod差异！")
-			fmt.Println("请确保双方Mod一致后再开始游戏。")
-		} else if len(comparison.Same) > 0 {
-			fmt.Println("\n✅ 所有Mod一致，可以开始游戏！")
-		}
-	})
+	connector.SetCallbacks(
+		func(comparison core.ModComparison) {
+			fmt.Println("\n" + strings.Repeat("=", 50))
+			fmt.Println("Mods对比结果:")
+			fmt.Println(core.FormatComparisonResult(comparison))
+			fmt.Println(strings.Repeat("=", 50))
+			
+			// 如果有差异，提示用户
+			if len(comparison.OnlyInLocal) > 0 || 
+			   len(comparison.OnlyInRemote) > 0 || 
+			   len(comparison.Different) > 0 {
+				fmt.Println("\n⚠️  发现Mod差异！")
+				fmt.Println("请确保双方Mod一致后再开始游戏。")
+			} else if len(comparison.Same) > 0 {
+				fmt.Println("\n✅ 所有Mod一致，可以开始游戏！")
+			}
+		},
+		func() {
+			fmt.Println("\n✅ 已连接到主机")
+		},
+		func() {
+			fmt.Println("\n❌ 与主机断开连接")
+		},
+	)
 	
-	client.SetConnectedHandler(func() {
-		fmt.Println("\n✅ 已连接到主机")
-	})
-	
-	client.SetDisconnectedHandler(func() {
-		fmt.Println("\n❌ 与主机断开连接")
-		os.Exit(0)
-	})
-	
-	// 启动心跳
-	client.StartHeartbeat(30 * time.Second)
+	// 启动P2P连接
+	if err := connector.Start(); err != nil {
+		fmt.Printf("启动P2P连接失败: %v\n", err)
+		os.Exit(1)
+	}
 	
 	// 等待用户中断
 	waitForInterrupt()
