@@ -22,6 +22,9 @@ type P2PConnector struct {
 	onDisconnected  func()
 	mu              sync.RWMutex
 	connected       bool
+	// ICE候选队列：当远程描述未设置时缓存ICE候选
+	pendingICECandidates []webrtc.ICECandidateInit
+	pendingICEMu         sync.RWMutex
 }
 
 // P2PConfig P2P配置
@@ -268,6 +271,26 @@ func (p *P2PConnector) handleAnswer(data []byte) {
 	}
 
 	log.Printf("Remote description set successfully")
+	
+	// 处理缓存的ICE候选
+	p.pendingICEMu.Lock()
+	if len(p.pendingICECandidates) > 0 {
+		log.Printf("处理 %d 个缓存的ICE候选", len(p.pendingICECandidates))
+		for _, candidate := range p.pendingICECandidates {
+			if err := p.connection.AddICECandidate(candidate); err != nil {
+				log.Printf("添加缓存的ICE候选失败: %v", err)
+			}
+		}
+		// 清空缓存
+		p.pendingICECandidates = nil
+	}
+	p.pendingICEMu.Unlock()
+	
+	// 连接建立
+	p.mu.Lock()
+	p.connected = true
+	p.mu.Unlock()
+	log.Printf("P2P连接已建立")
 }
 
 // handleICECandidate 处理ICE候选
@@ -280,8 +303,22 @@ func (p *P2PConnector) handleICECandidate(data []byte) {
 		return
 	}
 
-	if err := p.connection.AddICECandidate(iceData.Candidate); err != nil {
-		log.Printf("Failed to add ICE candidate: %v", err)
+	// 解析ICE候选
+	var candidate webrtc.ICECandidateInit
+	if err := json.Unmarshal([]byte(iceData.Candidate), &candidate); err != nil {
+		log.Printf("Failed to unmarshal ICE candidate: %v", err)
+		return
+	}
+	
+	// 尝试添加ICE候选
+	if err := p.connection.AddICECandidate(candidate); err != nil {
+		// 如果失败（可能是远程描述未设置），缓存起来
+		log.Printf("ICE候选添加失败，缓存起来等待远程描述设置: %v", err)
+		p.pendingICEMu.Lock()
+		p.pendingICECandidates = append(p.pendingICECandidates, candidate)
+		p.pendingICEMu.Unlock()
+	} else {
+		log.Printf("ICE候选添加成功")
 	}
 }
 
