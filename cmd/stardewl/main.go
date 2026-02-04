@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"encoding/json"
 	"os"
 	"strings"
 
@@ -88,6 +89,36 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 	// 自动生成房间ID
 	roomID := core.GenerateRoomID()
 	config.RoomID = roomID
+
+	// 先在信令服务器上创建房间
+	fmt.Println("在信令服务器上创建房间...")
+	createRoomURL := strings.Replace(signalingURL, "ws://", "http://", 1)
+	createRoomURL = strings.Replace(createRoomURL, "/ws", "/create", 1)
+	
+	// 使用POST请求创建房间
+	resp, err := http.Post(createRoomURL, "application/json", nil)
+	if err != nil {
+		fmt.Printf("❌ 创建房间失败: %v\n", err)
+		os.Exit(1)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != 200 {
+		fmt.Printf("❌ 创建房间失败，状态码: %d\n", resp.StatusCode)
+		os.Exit(1)
+	}
+	
+	var roomResponse struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&roomResponse); err != nil {
+		fmt.Printf("❌ 解析房间响应失败: %v\n", err)
+		os.Exit(1)
+	}
+	
+	// 使用服务器返回的房间ID
+	config.RoomID = roomResponse.Code
+	roomID = roomResponse.Code
 
 	fmt.Printf("✅ 连接码: %s\n", roomID)
 	fmt.Println("等待客户端连接...")
