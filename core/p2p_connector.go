@@ -277,7 +277,13 @@ func (p *P2PConnector) handleAnswer(data []byte) {
 	if len(p.pendingICECandidates) > 0 {
 		log.Printf("处理 %d 个缓存的ICE候选", len(p.pendingICECandidates))
 		for _, candidate := range p.pendingICECandidates {
-			if err := p.connection.AddICECandidate(candidate); err != nil {
+			// 将ICECandidateInit转换为JSON字符串
+			candidateJSON, err := json.Marshal(candidate)
+			if err != nil {
+				log.Printf("序列化ICE候选失败: %v", err)
+				continue
+			}
+			if err := p.connection.AddICECandidate(string(candidateJSON)); err != nil {
 				log.Printf("添加缓存的ICE候选失败: %v", err)
 			}
 		}
@@ -311,7 +317,14 @@ func (p *P2PConnector) handleICECandidate(data []byte) {
 	}
 	
 	// 尝试添加ICE候选
-	if err := p.connection.AddICECandidate(candidate); err != nil {
+	// 将ICECandidateInit转换为JSON字符串
+	candidateJSON, err := json.Marshal(candidate)
+	if err != nil {
+		log.Printf("序列化ICE候选失败: %v", err)
+		return
+	}
+	
+	if err := p.connection.AddICECandidate(string(candidateJSON)); err != nil {
 		// 如果失败（可能是远程描述未设置），缓存起来
 		log.Printf("ICE候选添加失败，缓存起来等待远程描述设置: %v", err)
 		p.pendingICEMu.Lock()
