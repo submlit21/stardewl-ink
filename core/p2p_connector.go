@@ -22,6 +22,8 @@ type P2PConnector struct {
 	onDisconnected  func()
 	mu              sync.RWMutex
 	connected       bool
+	heartbeatTicker *time.Ticker
+	stopHeartbeat   chan bool
 }
 
 // P2PConfig P2P配置
@@ -106,12 +108,12 @@ func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
 
 // Start 启动P2P连接
 func (p *P2PConnector) Start() error {
-	log.Printf("Starting P2P connection for room: %s (host: %v)", p.roomID, p.isHost)
+	log.Printf("🚀 启动P2P连接 for room: %s (host: %v)", p.roomID, p.isHost)
 	
 	// 给信令连接一点时间建立
 	time.Sleep(2 * time.Second)
 	
-	log.Printf("Signaling connection established for room: %s", p.roomID)
+	log.Printf("📞 信令连接已建立 for room: %s", p.roomID)
 
 	// 如果是主机，创建并发送offer
 	if p.isHost {
@@ -124,7 +126,7 @@ func (p *P2PConnector) Start() error {
 
 // startAsHost 作为主机启动
 func (p *P2PConnector) startAsHost() error {
-	log.Printf("Creating WebRTC offer as host...")
+	log.Printf("🎯 创建WebRTC Offer as host...")
 	
 	// 创建offer
 	offer, err := p.connection.CreateOffer()
@@ -132,7 +134,7 @@ func (p *P2PConnector) startAsHost() error {
 		return fmt.Errorf("failed to create offer: %w", err)
 	}
 
-	log.Printf("Offer created successfully, length: %d bytes", len(offer))
+	log.Printf("✅ Offer创建成功, length: %d bytes", len(offer))
 	
 	// 发送offer到信令服务器
 	if err := p.signalingClient.SendMessage("offer", map[string]string{
@@ -147,7 +149,7 @@ func (p *P2PConnector) startAsHost() error {
 
 // startAsClient 作为客户端启动
 func (p *P2PConnector) startAsClient() error {
-	log.Printf("Waiting for offer from host...")
+	log.Printf("⏳ 等待主机Offer...")
 	return nil
 }
 
@@ -400,22 +402,35 @@ func (p *P2PConnector) handleConnectionClose() {
 }
 
 // handleDisconnection 处理断开连接
-func (p *P2PConnector) handleDisconnection() {
+// setConnected 设置连接状态
+func (p *P2PConnector) setConnected(connected bool) {
 	p.mu.Lock()
-	if p.connected {
-		p.connected = false
+	wasConnected := p.connected
+	p.connected = connected
+	p.mu.Unlock()
+	
+	if connected && !wasConnected {
+		log.Printf("✅ P2P连接已建立 (room: %s)", p.roomID)
+		// 启动心跳
+		p.startHeartbeat()
+		if p.onConnected != nil {
+			p.onConnected()
+		}
+	} else if !connected && wasConnected {
+		log.Printf("🔌 P2P连接已断开 (room: %s)", p.roomID)
+		// 停止心跳
+		p.stopHeartbeat()
 		if p.onDisconnected != nil {
 			p.onDisconnected()
 		}
 	}
-	p.mu.Unlock()
 }
 
-// SendModsList 发送Mod列表
-func (p *P2PConnector) SendModsList() error {
-	if !p.connection.IsConnected() {
-		return fmt.Errorf("not connected")
-	}
+// handleDisconnection 处理断开连接
+func (p *P2PConnector) handleDisconnection() {
+	p.setConnected(false)
+	log.Printf("Disconnected from room: %s", p.roomID)
+}
 
 	mods, err := ScanMods(p.modsPath)
 	if err != nil {
@@ -448,9 +463,51 @@ func (p *P2PConnector) SetCallbacks(
 }
 
 // Close 关闭P2P连接器
+// startHeartbeat 启动心跳机制
+func (p *P2PConnector) startHeartbeat() {
+	p.heartbeatTicker = time.NewTicker(30 * time.Second) // 每30秒发送一次心跳
+	p.stopHeartbeat = make(chan bool)
+	
+	go func() {
+		for {
+			select {
+			case <-p.heartbeatTicker.C:
+				if p.IsConnected() {
+					// 发送心跳消息
+					if err := p.signalingClient.SendMessage("ping", map[string]string{
+						"timestamp": time.Now().Format(time.RFC3339),
+					}); err != nil {
+						log.Printf("⚠️ 发送心跳失败: %v", err)
+					} else {
+						log.Printf("💓 发送心跳 (room: %s)", p.roomID)
+					}
+				}
+			case <-p.stopHeartbeat:
+				return
+			}
+		}
+	}()
+	
+	log.Printf("✅ 心跳机制已启动 (room: %s)", p.roomID)
+}
+
+// stopHeartbeat 停止心跳机制
+func (p *P2PConnector) stopHeartbeat() {
+	if p.heartbeatTicker != nil {
+		p.heartbeatTicker.Stop()
+	}
+	if p.stopHeartbeat != nil {
+		close(p.stopHeartbeat)
+	}
+	log.Printf("🛑 心跳机制已停止 (room: %s)", p.roomID)
+}
+
 func (p *P2PConnector) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
+	
+	// 停止心跳
+	p.stopHeartbeat()
 	
 	if p.signalingClient != nil {
 		p.signalingClient.Close()

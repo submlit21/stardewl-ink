@@ -46,7 +46,19 @@ func NewConnection(connectionID string, isHost bool, config ConnectionConfig) (*
 
 	// 设置ICE连接状态回调
 	peerConnection.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
-		log.Printf("ICE Connection State has changed: %s\n", state.String())
+		stateStr := state.String()
+		log.Printf("🌐 ICE连接状态: %s (room: %s)", stateStr, connectionID)
+		
+		switch state {
+		case webrtc.ICEConnectionStateConnected:
+			log.Printf("✅ ICE连接已建立 (room: %s)", connectionID)
+		case webrtc.ICEConnectionStateDisconnected:
+			log.Printf("⚠️  ICE连接断开 (room: %s)", connectionID)
+		case webrtc.ICEConnectionStateFailed:
+			log.Printf("❌ ICE连接失败 (room: %s)", connectionID)
+		case webrtc.ICEConnectionStateClosed:
+			log.Printf("🔒 ICE连接关闭 (room: %s)", connectionID)
+		}
 		
 		if state == webrtc.ICEConnectionStateDisconnected ||
 			state == webrtc.ICEConnectionStateFailed ||
@@ -94,7 +106,8 @@ func NewConnection(connectionID string, isHost bool, config ConnectionConfig) (*
 // setupDataChannel 设置数据通道的回调
 func (c *Connection) setupDataChannel(dc *webrtc.DataChannel) {
 	dc.OnOpen(func() {
-		log.Printf("Data channel '%s' opened\n", dc.Label())
+		label := dc.Label()
+		log.Printf("📡 数据通道 '%s' 已打开 (room: %s)", label, c.connectionID)
 	})
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
