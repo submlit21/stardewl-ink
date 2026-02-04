@@ -6,6 +6,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
 	"sync"
 	"time"
 
@@ -97,7 +98,12 @@ func main() {
 	http.HandleFunc("/health", handleHealth)
 
 	// 启动服务器
-	port := ":8080"
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = ":8080"
+	} else if port[0] != ':' {
+		port = ":" + port
+	}
 	log.Printf("Signaling server starting on port %s\n", port)
 	log.Fatal(http.ListenAndServe(port, nil))
 }
