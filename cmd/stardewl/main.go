@@ -142,21 +142,21 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 	config.RoomID = roomResponse.Code
 	roomID = roomResponse.Code
 
-	fmt.Printf("✅ 连接码: %s\n", roomID)
-	fmt.Println("等待客户端连接...")
-	fmt.Println("(按 Ctrl+C 退出)")
+	fmt.Printf("Connection code: %s\n", roomID)
+	fmt.Println("Waiting for client connection...")
+	fmt.Println("(Press Ctrl+C to exit)")
 
-	// 创建P2P连接器
+	// Create P2P connector
 	connector, err := core.NewP2PConnector(config)
 	if err != nil {
-		log.Printf("❌ 创建P2P连接器失败: %v", err)
+		log.Printf("Failed to create P2P connector: %v", err)
 		os.Exit(1)
 	}
 	defer connector.Close()
 
 	// 启动连接
 	if err := connector.Start(); err != nil {
-		log.Printf("❌ 启动P2P连接失败: %v", err)
+		log.Printf(" 启动P2P连接失败: %v", err)
 		os.Exit(1)
 	}
 
@@ -242,31 +242,31 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 		},
 	}
 
-	// 创建P2P连接器
+	// Create P2P connector
 	connector, err := core.NewP2PConnector(config)
 	if err != nil {
-		log.Printf("❌ 创建P2P连接器失败: %v", err)
+		log.Printf("Failed to create P2P connector: %v", err)
 		os.Exit(1)
 	}
 	defer connector.Close()
 
-	// 启动连接
+	// Start connection
 	if err := connector.Start(); err != nil {
-		log.Printf("❌ 启动P2P连接失败: %v", err)
+		log.Printf("Failed to start P2P connection: %v", err)
 		os.Exit(1)
 	}
 
-	// 简单等待
-	fmt.Print("\n按 Enter 键退出...")
+	// Simple wait
+	fmt.Print("\nPress Enter to exit...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
 
 func listModsInPath(modsPath string) {
-	fmt.Println("=== 列出Mods ===")
+	fmt.Println("=== Listing Mods ===")
 	
 	mods, err := core.ScanMods(modsPath)
 	if err != nil {
-		log.Printf("扫描Mods失败: %v", err)
+		log.Printf("Failed to scan Mods: %v", err)
 		os.Exit(1)
 	}
 

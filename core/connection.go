@@ -47,17 +47,17 @@ func NewConnection(connectionID string, isHost bool, config ConnectionConfig) (*
 	// 设置ICE连接状态回调
 	peerConnection.OnICEConnectionStateChange(func(state webrtc.ICEConnectionState) {
 		stateStr := state.String()
-		log.Printf("🌐 ICE连接状态: %s (room: %s)", stateStr, connectionID)
+		log.Printf("ICE connection state: %s (room: %s)", stateStr, connectionID)
 		
 		switch state {
 		case webrtc.ICEConnectionStateConnected:
-			log.Printf("✅ ICE连接已建立 (room: %s)", connectionID)
+			log.Printf("ICE connection established (room: %s)", connectionID)
 		case webrtc.ICEConnectionStateDisconnected:
-			log.Printf("⚠️  ICE连接断开 (room: %s)", connectionID)
+			log.Printf("ICE connection disconnected (room: %s)", connectionID)
 		case webrtc.ICEConnectionStateFailed:
-			log.Printf("❌ ICE连接失败 (room: %s)", connectionID)
+			log.Printf("ICE connection failed (room: %s)", connectionID)
 		case webrtc.ICEConnectionStateClosed:
-			log.Printf("🔒 ICE连接关闭 (room: %s)", connectionID)
+			log.Printf("ICE connection closed (room: %s)", connectionID)
 		}
 		
 		if state == webrtc.ICEConnectionStateDisconnected ||
@@ -96,7 +96,7 @@ func NewConnection(connectionID string, isHost bool, config ConnectionConfig) (*
 		peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
 			conn.setupDataChannel(dc)
 			conn.dataChannel = dc
-			log.Printf("📡 数据通道 '%s' opened\n", dc.Label())
+			log.Printf("Data channel '%s' opened\n", dc.Label())
 		})
 	}
 
@@ -107,7 +107,7 @@ func NewConnection(connectionID string, isHost bool, config ConnectionConfig) (*
 func (c *Connection) setupDataChannel(dc *webrtc.DataChannel) {
 	dc.OnOpen(func() {
 		label := dc.Label()
-		log.Printf("📡 数据通道 '%s' 已打开 (room: %s)", label, c.connectionID)
+		log.Printf("Data channel '%s' opened (room: %s)", label, c.connectionID)
 	})
 
 	dc.OnMessage(func(msg webrtc.DataChannelMessage) {
@@ -121,7 +121,7 @@ func (c *Connection) setupDataChannel(dc *webrtc.DataChannel) {
 	})
 
 	dc.OnClose(func() {
-		log.Printf("📡 数据通道 '%s' closed\n", dc.Label())
+		log.Printf("Data channel '%s' closed\n", dc.Label())
 		c.close()
 	})
 }

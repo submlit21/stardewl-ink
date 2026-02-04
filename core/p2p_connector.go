@@ -56,7 +56,7 @@ func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to create WebRTC connection: %w", err)
 	}
-	
+
 	connector.connection = connection
 
 	// 现在创建信令客户端（确保回调已经设置）
@@ -65,22 +65,22 @@ func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
 		connection.Close()
 		return nil, fmt.Errorf("failed to create signaling client: %w", err)
 	}
-	
+
 	connector.signalingClient = signalingClient
-	
+
 	// 设置ICE候选回调
 	connection.peerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
 		if candidate == nil {
 			log.Printf("ICE candidate gathering complete for %s", config.RoomID)
 			return
 		}
-		
+
 		candidateJSON, err := json.Marshal(candidate.ToJSON())
 		if err != nil {
 			log.Printf("Failed to marshal ICE candidate: %v", err)
 			return
 		}
-		
+
 		// 发送ICE候选到信令服务器
 		if err := signalingClient.SendMessage("ice_candidate", map[string]string{
 			"candidate": string(candidateJSON),
@@ -107,14 +107,14 @@ func NewP2PConnector(config P2PConfig) (*P2PConnector, error) {
 	return connector, nil
 }
 
-// Start 启动P2P连接
+// Start starts the P2P connection
 func (p *P2PConnector) Start() error {
-	log.Printf("🚀 启动P2P连接 for room: %s (host: %v)", p.roomID, p.isHost)
-	
-	// 给信令连接一点时间建立
+	log.Printf("Starting P2P connection for room: %s (host: %v)", p.roomID, p.isHost)
+
+	// Give signaling connection time to establish
 	time.Sleep(2 * time.Second)
-	
-	log.Printf("📞 信令连接已建立 for room: %s", p.roomID)
+
+	log.Printf("Signaling connection established for room: %s", p.roomID)
 
 	// 如果是主机，创建并发送offer
 	if p.isHost {
@@ -125,18 +125,18 @@ func (p *P2PConnector) Start() error {
 	return p.startAsClient()
 }
 
-// startAsHost 作为主机启动
+// startAsHost starts as host
 func (p *P2PConnector) startAsHost() error {
-	log.Printf("🎯 创建WebRTC Offer as host...")
+	log.Printf("Creating WebRTC Offer as host...")
 	
-	// 创建offer
+	// Create offer
 	offer, err := p.connection.CreateOffer()
 	if err != nil {
 		return fmt.Errorf("failed to create offer: %w", err)
 	}
-
-	log.Printf("✅ Offer创建成功, length: %d bytes", len(offer))
 	
+	log.Printf("Offer created successfully, length: %d bytes", len(offer))
+
 	// 发送offer到信令服务器
 	if err := p.signalingClient.SendMessage("offer", map[string]string{
 		"offer": offer,
@@ -150,23 +150,23 @@ func (p *P2PConnector) startAsHost() error {
 
 // startAsClient 作为客户端启动
 func (p *P2PConnector) startAsClient() error {
-	log.Printf("⏳ 等待主机Offer...")
+	log.Printf("Waiting for host offer...")
 	return nil
 }
 
 // handleSignalingMessage 处理信令消息
 func (p *P2PConnector) handleSignalingMessage(msgType string, data []byte) {
-	log.Printf("📨 P2PConnector.handleSignalingMessage called! Type: %s, Data length: %d", msgType, len(data))
-	
+	// log.Printf("P2PConnector.handleSignalingMessage called! Type: %s, Data length: %d", msgType, len(data))
+
 	switch msgType {
 	case "offer":
-		log.Printf("🎯 Processing offer message")
+		// log.Printf("Processing offer message")
 		p.handleOffer(data)
 	case "answer":
-		log.Printf("🎯 Processing answer message")
+		// log.Printf("Processing answer message")
 		p.handleAnswer(data)
 	case "ice_candidate":
-		log.Printf("🎯 Processing ICE candidate message")
+		// log.Printf("Processing ICE candidate message")
 		p.handleICECandidate(data)
 	case "client_connected":
 		log.Printf("New client connected to room")
@@ -195,48 +195,48 @@ func (p *P2PConnector) handleOffer(data []byte) {
 		return
 	}
 
-	log.Printf("✅ Client received offer from host (data length: %d bytes)", len(data))
-	
+	log.Printf("Client received offer from host (data length: %d bytes)", len(data))
+
 	var offerData struct {
 		Offer string `json:"offer"`
 	}
 	if err := json.Unmarshal(data, &offerData); err != nil {
-		log.Printf("❌ Failed to parse offer: %v", err)
+		log.Printf("Failed to parse offer: %v", err)
 		log.Printf("Offer data (first 200 chars): %s", string(data)[:min(200, len(data))])
 		return
 	}
-	
+
 	if offerData.Offer == "" {
-		log.Printf("❌ Empty offer received")
+		log.Printf("Empty offer received")
 		return
 	}
 
 	log.Printf("Setting remote description (offer length: %d chars)", len(offerData.Offer))
-	
+
 	// 设置远程描述
 	if err := p.connection.SetRemoteDescription(offerData.Offer); err != nil {
-		log.Printf("❌ Failed to set remote description: %v", err)
+		log.Printf(" Failed to set remote description: %v", err)
 		return
 	}
 
 	log.Printf("Creating answer...")
-	
+
 	// 创建answer
 	answer, err := p.connection.CreateAnswer()
 	if err != nil {
-		log.Printf("❌ Failed to create answer: %v", err)
+		log.Printf(" Failed to create answer: %v", err)
 		return
 	}
 
 	log.Printf("Sending answer (length: %d chars)", len(answer))
-	
+
 	// 发送answer到信令服务器
 	if err := p.signalingClient.SendMessage("answer", map[string]string{
 		"answer": answer,
 	}); err != nil {
-		log.Printf("❌ Failed to send answer: %v", err)
+		log.Printf(" Failed to send answer: %v", err)
 	} else {
-		log.Printf("✅ Answer sent to signaling server")
+		log.Printf(" Answer sent to signaling server")
 	}
 }
 
@@ -255,7 +255,7 @@ func (p *P2PConnector) handleAnswer(data []byte) {
 	}
 
 	log.Printf("Host received answer from client")
-	
+
 	var answerData struct {
 		Answer string `json:"answer"`
 	}
@@ -271,7 +271,7 @@ func (p *P2PConnector) handleAnswer(data []byte) {
 	}
 
 	log.Printf("Remote description set successfully")
-	
+
 	// 处理缓存的ICE候选
 	p.pendingICEMu.Lock()
 	if len(p.pendingICECandidates) > 0 {
@@ -280,23 +280,23 @@ func (p *P2PConnector) handleAnswer(data []byte) {
 			// 将ICECandidateInit转换为JSON字符串
 			candidateJSON, err := json.Marshal(candidate)
 			if err != nil {
-				log.Printf("序列化ICE候选失败: %v", err)
+				log.Printf("Failed to serialize ICE candidate: %v", err)
 				continue
 			}
 			if err := p.connection.AddICECandidate(string(candidateJSON)); err != nil {
-				log.Printf("添加缓存的ICE候选失败: %v", err)
+				log.Printf("Failed to add cached ICE candidate: %v", err)
 			}
 		}
 		// 清空缓存
 		p.pendingICECandidates = nil
 	}
 	p.pendingICEMu.Unlock()
-	
+
 	// 连接建立
 	p.mu.Lock()
 	p.connected = true
 	p.mu.Unlock()
-	log.Printf("P2P连接已建立")
+	log.Printf("P2P connection established")
 }
 
 // handleICECandidate 处理ICE候选
@@ -315,15 +315,15 @@ func (p *P2PConnector) handleICECandidate(data []byte) {
 		log.Printf("Failed to unmarshal ICE candidate: %v", err)
 		return
 	}
-	
+
 	// 尝试添加ICE候选
 	// 将ICECandidateInit转换为JSON字符串
 	candidateJSON, err := json.Marshal(candidate)
 	if err != nil {
-		log.Printf("序列化ICE候选失败: %v", err)
+		log.Printf("Failed to serialize ICE candidate: %v", err)
 		return
 	}
-	
+
 	if err := p.connection.AddICECandidate(string(candidateJSON)); err != nil {
 		// 如果失败（可能是远程描述未设置），缓存起来
 		log.Printf("ICE候选添加失败，缓存起来等待远程描述设置: %v", err)
@@ -331,7 +331,7 @@ func (p *P2PConnector) handleICECandidate(data []byte) {
 		p.pendingICECandidates = append(p.pendingICECandidates, candidate)
 		p.pendingICEMu.Unlock()
 	} else {
-		log.Printf("ICE候选添加成功")
+		log.Printf("ICE candidate added successfully")
 	}
 }
 
@@ -391,12 +391,12 @@ func (p *P2PConnector) handleModsList(payload json.RawMessage) {
 		Comparison: comparison,
 	}
 	comparisonData, _ := json.Marshal(comparisonMsg)
-	
+
 	msg := Message{
 		Type:    MessageTypeModsComparison,
 		Payload: comparisonData,
 	}
-	
+
 	msgData, _ := json.Marshal(msg)
 	p.connection.SendMessage(msgData)
 
@@ -415,7 +415,7 @@ func (p *P2PConnector) handleModsComparison(payload json.RawMessage) {
 	}
 
 	comparison := comparisonMsg.Comparison
-	
+
 	log.Printf("Mods comparison received:")
 	log.Printf("  Only in local: %d", len(comparison.OnlyInLocal))
 	log.Printf("  Only in remote: %d", len(comparison.OnlyInRemote))
@@ -476,12 +476,12 @@ func (p *P2PConnector) SendModsList() error {
 		Mods: mods,
 	}
 	modsData, _ := json.Marshal(modsMsg)
-	
+
 	msg := Message{
 		Type:    MessageTypeModsList,
 		Payload: modsData,
 	}
-	
+
 	msgData, _ := json.Marshal(msg)
 	return p.connection.SendMessage(msgData)
 }
@@ -501,15 +501,15 @@ func (p *P2PConnector) SetCallbacks(
 func (p *P2PConnector) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
+
 	if p.signalingClient != nil {
 		p.signalingClient.Close()
 	}
-	
+
 	if p.connection != nil {
 		p.connection.Close()
 	}
-	
+
 	p.connected = false
 }
 
