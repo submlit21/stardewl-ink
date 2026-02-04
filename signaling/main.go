@@ -452,7 +452,7 @@ func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	mu.RLock()
-	_, exists := rooms[connectionID]
+	room, exists := rooms[connectionID]
 	mu.RUnlock()
 
 	if !exists {
@@ -460,12 +460,24 @@ func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 返回成功响应
-	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{
+	// 检查房间是否有主机连接（房间可能已创建但主机还未连接）
+	mu.RLock()
+	hasHost := room.Host != nil
+	mu.RUnlock()
+	
+	response := map[string]interface{}{
 		"status": "room_exists",
 		"code":   connectionID,
-	})
+		"ready":  hasHost,  // 房间是否就绪（有主机连接）
+	}
+	
+	if !hasHost {
+		response["message"] = "Room exists but host not connected yet"
+	}
+
+	// 返回成功响应
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(response)
 }
 
 func handleHealth(w http.ResponseWriter, r *http.Request) {

@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"time"
 	"encoding/json"
 	"os"
 	"strings"
@@ -90,15 +91,36 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 	roomID := core.GenerateRoomID()
 	config.RoomID = roomID
 
-	// 先在信令服务器上创建房间
+	// 先在信令服务器上创建房间（带重试）
 	fmt.Println("在信令服务器上创建房间...")
 	createRoomURL := strings.Replace(signalingURL, "ws://", "http://", 1)
 	createRoomURL = strings.Replace(createRoomURL, "/ws", "/create", 1)
 	
-	// 使用POST请求创建房间
-	resp, err := http.Post(createRoomURL, "application/json", nil)
+	var resp *http.Response
+	var err error
+	
+	// 重试3次，每次等待1秒
+	for i := 0; i < 3; i++ {
+		resp, err = http.Post(createRoomURL, "application/json", nil)
+		if err == nil && resp.StatusCode == 200 {
+			break
+		}
+		
+		if err != nil {
+			fmt.Printf("⚠️  创建房间尝试 %d 失败: %v\n", i+1, err)
+		} else {
+			resp.Body.Close()
+			fmt.Printf("⚠️  创建房间尝试 %d 失败，状态码: %d\n", i+1, resp.StatusCode)
+		}
+		
+		if i < 2 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+	
 	if err != nil {
-		fmt.Printf("❌ 创建房间失败: %v\n", err)
+		fmt.Printf("❌ 创建房间失败（重试3次后）: %v\n", err)
+		fmt.Println("请确保信令服务器正在运行: ./dist/stardewl-signaling")
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
@@ -184,7 +206,26 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 		os.Exit(1)
 	}
 	
-	fmt.Println("✅ 房间验证通过")
+	// 解析响应
+	var roomResponse struct {
+		Status  string `json:"status"`
+		Code    string `json:"code"`
+		Ready   bool   `json:"ready"`
+		Message string `json:"message,omitempty"`
+	}
+	
+	if err := json.NewDecoder(resp.Body).Decode(&roomResponse); err != nil {
+		fmt.Printf("❌ 解析房间响应失败: %v\n", err)
+		os.Exit(1)
+	}
+	
+	if roomResponse.Ready {
+		fmt.Println("✅ 房间验证通过 (主机已连接)")
+	} else {
+		fmt.Println("⚠️  房间存在但主机未连接")
+		fmt.Println("请等待主机连接，或检查主机是否正在运行")
+		// 这里可以选择等待或退出
+	}
 
 	// 创建P2P连接器配置
 	config := core.P2PConfig{
