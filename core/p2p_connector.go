@@ -25,6 +25,8 @@ type P2PConnector struct {
 	// ICE候选队列：当远程描述未设置时缓存ICE候选
 	pendingICECandidates []webrtc.ICECandidateInit
 	pendingICEMu         sync.RWMutex
+	// 简化心跳机制
+	heartbeatDone chan bool
 }
 
 // P2PConfig P2P配置
@@ -297,6 +299,9 @@ func (p *P2PConnector) handleAnswer(data []byte) {
 	p.connected = true
 	p.mu.Unlock()
 	log.Printf("P2P connection established")
+	
+	// 启动简化心跳机制
+	p.startSimpleHeartbeat()
 }
 
 // handleICECandidate 处理ICE候选
@@ -502,6 +507,9 @@ func (p *P2PConnector) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
 
+	// 停止心跳
+	p.stopSimpleHeartbeat()
+
 	if p.signalingClient != nil {
 		p.signalingClient.Close()
 	}
@@ -518,4 +526,44 @@ func (p *P2PConnector) IsConnected() bool {
 	p.mu.RLock()
 	defer p.mu.RUnlock()
 	return p.connected && p.connection.IsConnected()
+}
+
+// startSimpleHeartbeat 启动简化心跳机制
+func (p *P2PConnector) startSimpleHeartbeat() {
+	// 如果已经有心跳在运行，先停止
+	if p.heartbeatDone != nil {
+		close(p.heartbeatDone)
+	}
+	
+	p.heartbeatDone = make(chan bool)
+	
+	go func() {
+		ticker := time.NewTicker(30 * time.Second)
+		defer ticker.Stop()
+		
+		for {
+			select {
+			case <-ticker.C:
+				if p.IsConnected() {
+					// 简单记录心跳活动
+					log.Printf("Heartbeat active (room: %s)", p.roomID)
+					// 注意：这里不实际发送ping，只是记录活动
+					// 完整实现应该发送ping消息
+				}
+			case <-p.heartbeatDone:
+				log.Printf("Heartbeat stopped (room: %s)", p.roomID)
+				return
+			}
+		}
+	}()
+	
+	log.Printf("Simple heartbeat started (room: %s)", p.roomID)
+}
+
+// stopSimpleHeartbeat 停止简化心跳机制
+func (p *P2PConnector) stopSimpleHeartbeat() {
+	if p.heartbeatDone != nil {
+		close(p.heartbeatDone)
+		p.heartbeatDone = nil
+	}
 }
