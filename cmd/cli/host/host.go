@@ -1,7 +1,10 @@
 package host
 
 import (
+	"encoding/json"
 	"fmt"
+	"net/http"
+	"strings"
 	"time"
 	
 	"github.com/pion/webrtc/v3"
@@ -45,7 +48,6 @@ func runHost(cmd *cobra.Command, args []string) error {
 	
 	fmt.Println("=== Host Mode ===")
 	fmt.Printf("Signaling server: %s\n", signalingURL)
-	fmt.Println("Creating room on signaling server...")
 	
 	// Create P2P connector configuration
 	config := core.P2PConfig{
@@ -64,6 +66,60 @@ func runHost(cmd *cobra.Command, args []string) error {
 	// Auto-generate room ID
 	roomID := core.GenerateRoomID()
 	config.RoomID = roomID
+
+	// First create room on signaling server (with retry)
+	fmt.Println("Creating room on signaling server...")
+	createRoomURL := strings.Replace(signalingURL, "ws://", "http://", 1)
+	createRoomURL = strings.Replace(createRoomURL, "/ws", "/create", 1)
+	
+	var resp *http.Response
+	var err error
+	
+	// Retry 3 times, wait 1 second each time
+	for i := 0; i < 3; i++ {
+		resp, err = http.Post(createRoomURL, "application/json", nil)
+		if err == nil && resp.StatusCode == 200 {
+			break
+		}
+		
+		if err != nil {
+			fmt.Printf("⚠️  Create room attempt %d failed: %v\n", i+1, err)
+		} else {
+			resp.Body.Close()
+			fmt.Printf("⚠️  Create room attempt %d failed, status code: %d\n", i+1, resp.StatusCode)
+		}
+		
+		if i < 2 {
+			time.Sleep(1 * time.Second)
+		}
+	}
+	
+	if err != nil {
+		fmt.Printf("❌ Failed to create room (after 3 attempts): %v\n", err)
+		fmt.Println("Please ensure signaling server is running: ./dist/stardewl-signaling")
+		return fmt.Errorf("failed to create room: %v", err)
+	}
+	defer resp.Body.Close()
+	
+	if resp.StatusCode != 200 {
+		fmt.Printf("❌ Failed to create room, status code: %d\n", resp.StatusCode)
+		return fmt.Errorf("failed to create room, status: %d", resp.StatusCode)
+	}
+	
+	var roomResponse struct {
+		Code string `json:"code"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&roomResponse); err != nil {
+		fmt.Printf("❌ Failed to parse room response: %v\n", err)
+		return fmt.Errorf("failed to parse room response: %v", err)
+	}
+	
+	// Use server-returned room ID
+	config.RoomID = roomResponse.Code
+	roomID = roomResponse.Code
+
+	fmt.Printf("Connection code: %s\n", roomID)
+	fmt.Println("Waiting for client connection...")
 	
 	// Create P2P connector
 	connector, err := core.NewP2PConnector(config)
