@@ -17,22 +17,24 @@ import (
 
 func main() {
 	var (
-		hostMode      bool
-		joinCode      string
-		signalingURL  string
-		modsPath      string
-		verbose       bool
-		listMods      bool
-		interactive   bool
+		hostMode       bool
+		joinCode       string
+		signalingURL   string
+		modsPath       string
+		verbose        bool
+		listMods       bool
+		interactive    bool
+		timeoutSeconds int
 	)
 
-	flag.BoolVar(&hostMode, "host", false, "以主机模式运行")
-	flag.StringVar(&joinCode, "join", "", "以客户端模式运行，指定连接码")
-	flag.StringVar(&signalingURL, "signaling", "", "信令服务器URL (默认: ws://localhost:8080/ws)")
-	flag.StringVar(&modsPath, "mods", "", "Mods文件夹路径 (默认: 自动检测)")
-	flag.BoolVar(&verbose, "verbose", false, "启用详细日志")
-	flag.BoolVar(&listMods, "list-mods", false, "列出Mods文件夹中的mods")
-	flag.BoolVar(&interactive, "interactive", false, "交互模式")
+	flag.BoolVar(&hostMode, "host", false, "Run in host mode")
+	flag.StringVar(&joinCode, "join", "", "Run in client mode, specify connection code")
+	flag.StringVar(&signalingURL, "signaling", "", "Signaling server URL (default: ws://localhost:8080/ws)")
+	flag.StringVar(&modsPath, "mods", "", "Mods folder path (default: auto-detect)")
+	flag.BoolVar(&verbose, "verbose", false, "Enable verbose logging")
+	flag.BoolVar(&listMods, "list-mods", false, "List mods in Mods folder")
+	flag.BoolVar(&interactive, "interactive", false, "Interactive mode")
+	flag.IntVar(&timeoutSeconds, "timeout", 0, "Timeout in seconds, 0 means wait indefinitely")
 	flag.Parse()
 
 	if interactive {
@@ -46,9 +48,9 @@ func main() {
 	}
 
 	if hostMode {
-		runAsHost(signalingURL, modsPath, verbose)
+		runAsHost(signalingURL, modsPath, verbose, timeoutSeconds)
 	} else if joinCode != "" {
-		runAsClient(signalingURL, joinCode, modsPath, verbose)
+		runAsClient(signalingURL, joinCode, modsPath, verbose, timeoutSeconds)
 	} else {
 		fmt.Println("请指定模式:")
 		fmt.Println("  --host                   以主机模式运行")
@@ -63,15 +65,17 @@ func main() {
 	}
 }
 
-func runAsHost(signalingURL, modsPath string, verbose bool) {
-	fmt.Println("=== 主机模式 ===")
+func runAsHost(signalingURL, modsPath string, verbose bool, timeoutSeconds int) {
+	fmt.Println("=== Host Mode ===")
 	
 	// 如果没有指定信令服务器URL，使用默认值
 	if signalingURL == "" {
 		signalingURL = "ws://localhost:8080/ws"
 	}
 	
-	fmt.Printf("信令服务器: %s\n", signalingURL)
+	fmt.Printf("Signaling server: %s\n", signalingURL)
+	
+	fmt.Println("Creating room on signaling server...")
 	
 	// 创建P2P连接器配置
 	config := core.P2PConfig{
@@ -92,7 +96,7 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 	config.RoomID = roomID
 
 	// 先在信令服务器上创建房间（带重试）
-	fmt.Println("在信令服务器上创建房间...")
+	fmt.Println("Creating room on signaling server...")
 	createRoomURL := strings.Replace(signalingURL, "ws://", "http://", 1)
 	createRoomURL = strings.Replace(createRoomURL, "/ws", "/create", 1)
 	
@@ -107,10 +111,10 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 		}
 		
 		if err != nil {
-			fmt.Printf("⚠️  创建房间尝试 %d 失败: %v\n", i+1, err)
+			fmt.Printf("⚠️  Create room attempt %d failed: %v\n", i+1, err)
 		} else {
 			resp.Body.Close()
-			fmt.Printf("⚠️  创建房间尝试 %d 失败，状态码: %d\n", i+1, resp.StatusCode)
+			fmt.Printf("⚠️  Create room attempt %d failed, status code: %d\n", i+1, resp.StatusCode)
 		}
 		
 		if i < 2 {
@@ -119,14 +123,14 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 	}
 	
 	if err != nil {
-		fmt.Printf("❌ 创建房间失败（重试3次后）: %v\n", err)
-		fmt.Println("请确保信令服务器正在运行: ./dist/stardewl-signaling")
+		fmt.Printf("❌ Failed to create room (after 3 attempts): %v\n", err)
+		fmt.Println("Please ensure signaling server is running: ./dist/stardewl-signaling")
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 	
 	if resp.StatusCode != 200 {
-		fmt.Printf("❌ 创建房间失败，状态码: %d\n", resp.StatusCode)
+		fmt.Printf("❌ Failed to create room, status code: %d\n", resp.StatusCode)
 		os.Exit(1)
 	}
 	
@@ -134,7 +138,7 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 		Code string `json:"code"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&roomResponse); err != nil {
-		fmt.Printf("❌ 解析房间响应失败: %v\n", err)
+		fmt.Printf("❌ Failed to parse room response: %v\n", err)
 		os.Exit(1)
 	}
 	
@@ -156,53 +160,59 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 
 	// 启动连接
 	if err := connector.Start(); err != nil {
-		log.Printf(" 启动P2P连接失败: %v", err)
+		log.Printf("Failed to start P2P connection: %v", err)
 		os.Exit(1)
 	}
 
-	// 简单等待
-	fmt.Print("\n按 Enter 键退出...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	// 根据超时设置等待
+	if timeoutSeconds > 0 {
+		fmt.Printf("\nWaiting for %d seconds (timeout)...\n", timeoutSeconds)
+		time.Sleep(time.Duration(timeoutSeconds) * time.Second)
+		fmt.Println("Timeout reached, exiting...")
+	} else {
+		fmt.Print("\nPress Enter to exit...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+	}
 }
 
-func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
+func runAsClient(signalingURL, connectionID, modsPath string, verbose bool, timeoutSeconds int) {
 	fmt.Println("=== 客户端模式 ===")
 	
 	if connectionID == "" {
-		fmt.Println("错误: 必须指定连接码")
+		fmt.Println("Error: Must specify connection code")
 		os.Exit(1)
 	}
 	
-	fmt.Printf("连接码: %s\n", connectionID)
+	fmt.Printf("Connection code: %s\n", connectionID)
 	
 	// 如果没有指定信令服务器URL，使用默认值
 	if signalingURL == "" {
 		signalingURL = "ws://localhost:8080/ws"
 	}
 	
-	fmt.Printf("信令服务器: %s\n", signalingURL)
-	fmt.Println("正在连接到主机...")
-	fmt.Println("(按 Ctrl+C 退出)")
+	fmt.Printf("Signaling server: %s\n", signalingURL)
+	fmt.Println("Connecting to host...")
+	fmt.Println("(Press Ctrl+C to exit)")
 	
 	// 验证房间是否存在
-	fmt.Println("验证房间是否存在...")
+	fmt.Println("Verifying room exists...")
 	checkRoomURL := strings.Replace(signalingURL, "ws://", "http://", 1)
 	checkRoomURL = strings.Replace(checkRoomURL, "/ws", "/join/"+connectionID, 1)
 	
 	resp, err := http.Get(checkRoomURL)
 	if err != nil {
 		fmt.Printf("❌ 无法连接到信令服务器: %v\n", err)
-		fmt.Println("请确保信令服务器正在运行: ./dist/stardewl-signaling")
+		fmt.Println("Please ensure signaling server is running: ./dist/stardewl-signaling")
 		os.Exit(1)
 	}
 	defer resp.Body.Close()
 	
 	if resp.StatusCode == 404 {
-		fmt.Printf("❌ 房间不存在: %s\n", connectionID)
-		fmt.Println("请检查连接码是否正确，或让主机先创建房间")
+		fmt.Printf("❌ Room does not exist: %s\n", connectionID)
+		fmt.Println("Please check connection code, or wait for host to create room")
 		os.Exit(1)
 	} else if resp.StatusCode != 200 {
-		fmt.Printf("❌ 验证房间失败，状态码: %d\n", resp.StatusCode)
+		fmt.Printf("❌ Failed to verify room, status code: %d\n", resp.StatusCode)
 		os.Exit(1)
 	}
 	
@@ -215,15 +225,15 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 	}
 	
 	if err := json.NewDecoder(resp.Body).Decode(&roomResponse); err != nil {
-		fmt.Printf("❌ 解析房间响应失败: %v\n", err)
+		fmt.Printf("❌ Failed to parse room response: %v\n", err)
 		os.Exit(1)
 	}
 	
 	if roomResponse.Ready {
-		fmt.Println("✅ 房间验证通过 (主机已连接)")
+		fmt.Println("✅ Room verified (host connected)")
 	} else {
-		fmt.Println("⚠️  房间存在但主机未连接")
-		fmt.Println("请等待主机连接，或检查主机是否正在运行")
+		fmt.Println("⚠️  Room exists but host not connected")
+		fmt.Println("Please wait for host to connect, or check if host is running")
 		// 这里可以选择等待或退出
 	}
 
@@ -256,9 +266,15 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 		os.Exit(1)
 	}
 
-	// Simple wait
-	fmt.Print("\nPress Enter to exit...")
-	bufio.NewReader(os.Stdin).ReadBytes('\n')
+	// 根据超时设置等待
+	if timeoutSeconds > 0 {
+		fmt.Printf("\nWaiting for %d seconds (timeout)...\n", timeoutSeconds)
+		time.Sleep(time.Duration(timeoutSeconds) * time.Second)
+		fmt.Println("Timeout reached, exiting...")
+	} else {
+		fmt.Print("\nPress Enter to exit...")
+		bufio.NewReader(os.Stdin).ReadBytes('\n')
+	}
 }
 
 func listModsInPath(modsPath string) {
