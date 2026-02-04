@@ -2,22 +2,18 @@ package main
 
 import (
 	"bufio"
-	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"log"
 	"net/http"
 	"os"
 	"strings"
 
+	"github.com/pion/webrtc/v3"
 	"github.com/submlit21/stardewl-ink/core"
 )
 
 func main() {
-	// 启用详细日志
-	log.SetFlags(log.LstdFlags | log.Lmicroseconds)
-	
 	var (
 		hostMode      bool
 		joinCode      string
@@ -76,11 +72,11 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 	fmt.Printf("信令服务器: %s\n", signalingURL)
 	
 	// 创建P2P连接器配置
-	config := core.P2PConnectorConfig{
+	config := core.P2PConfig{
 		SignalingURL: signalingURL,
 		IsHost:       true,
 		ModsPath:     modsPath,
-		ICEServers: []core.ICEServer{
+		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 			{URLs: []string{"stun:stun1.l.google.com:19302"}},
 			{URLs: []string{"stun:stun2.l.google.com:19302"}},
@@ -111,17 +107,7 @@ func runAsHost(signalingURL, modsPath string, verbose bool) {
 		os.Exit(1)
 	}
 
-	// 等待连接
-	connector.WaitForConnection()
-
-	// 检查Mods
-	if err := connector.CheckMods(); err != nil {
-		log.Printf("Mods检查失败: %v", err)
-	} else {
-		fmt.Println("✅ Mods检查完成")
-	}
-
-	// 等待用户退出
+	// 简单等待
 	fmt.Print("\n按 Enter 键退出...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
@@ -157,12 +143,12 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 	fmt.Println("✅ 信令服务器可访问")
 
 	// 创建P2P连接器配置
-	config := core.P2PConnectorConfig{
+	config := core.P2PConfig{
 		SignalingURL: signalingURL,
 		RoomID:       connectionID,
 		IsHost:       false,
 		ModsPath:     modsPath,
-		ICEServers: []core.ICEServer{
+		ICEServers: []webrtc.ICEServer{
 			{URLs: []string{"stun:stun.l.google.com:19302"}},
 			{URLs: []string{"stun:stun1.l.google.com:19302"}},
 			{URLs: []string{"stun:stun2.l.google.com:19302"}},
@@ -185,17 +171,7 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 		os.Exit(1)
 	}
 
-	// 等待连接
-	connector.WaitForConnection()
-
-	// 检查Mods
-	if err := connector.CheckMods(); err != nil {
-		log.Printf("Mods检查失败: %v", err)
-	} else {
-		fmt.Println("✅ Mods检查完成")
-	}
-
-	// 等待用户退出
+	// 简单等待
 	fmt.Print("\n按 Enter 键退出...")
 	bufio.NewReader(os.Stdin).ReadBytes('\n')
 }
@@ -218,10 +194,4 @@ func listModsInPath(modsPath string) {
 	for _, mod := range mods {
 		fmt.Printf("  - %s (%s)\n", mod.Name, mod.Version)
 	}
-}
-
-func runInteractive() {
-	// 这里可以添加交互模式逻辑
-	fmt.Println("交互模式尚未实现")
-	fmt.Println("请使用 --host 或 --join 参数")
 }
