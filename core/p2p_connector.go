@@ -22,8 +22,6 @@ type P2PConnector struct {
 	onDisconnected  func()
 	mu              sync.RWMutex
 	connected       bool
-	heartbeatTicker *time.Ticker
-	stopHeartbeat   chan bool
 }
 
 // P2PConfig P2P配置
@@ -402,35 +400,22 @@ func (p *P2PConnector) handleConnectionClose() {
 }
 
 // handleDisconnection 处理断开连接
-// setConnected 设置连接状态
-func (p *P2PConnector) setConnected(connected bool) {
+func (p *P2PConnector) handleDisconnection() {
 	p.mu.Lock()
-	wasConnected := p.connected
-	p.connected = connected
-	p.mu.Unlock()
-	
-	if connected && !wasConnected {
-		log.Printf("✅ P2P连接已建立 (room: %s)", p.roomID)
-		// 启动心跳
-		p.startHeartbeat()
-		if p.onConnected != nil {
-			p.onConnected()
-		}
-	} else if !connected && wasConnected {
-		log.Printf("🔌 P2P连接已断开 (room: %s)", p.roomID)
-		// 停止心跳
-		p.stopHeartbeat()
+	if p.connected {
+		p.connected = false
 		if p.onDisconnected != nil {
 			p.onDisconnected()
 		}
 	}
+	p.mu.Unlock()
 }
 
-// handleDisconnection 处理断开连接
-func (p *P2PConnector) handleDisconnection() {
-	p.setConnected(false)
-	log.Printf("Disconnected from room: %s", p.roomID)
-}
+// SendModsList 发送Mod列表
+func (p *P2PConnector) SendModsList() error {
+	if !p.connection.IsConnected() {
+		return fmt.Errorf("not connected")
+	}
 
 	mods, err := ScanMods(p.modsPath)
 	if err != nil {
@@ -463,51 +448,9 @@ func (p *P2PConnector) SetCallbacks(
 }
 
 // Close 关闭P2P连接器
-// startHeartbeat 启动心跳机制
-func (p *P2PConnector) startHeartbeat() {
-	p.heartbeatTicker = time.NewTicker(30 * time.Second) // 每30秒发送一次心跳
-	p.stopHeartbeat = make(chan bool)
-	
-	go func() {
-		for {
-			select {
-			case <-p.heartbeatTicker.C:
-				if p.IsConnected() {
-					// 发送心跳消息
-					if err := p.signalingClient.SendMessage("ping", map[string]string{
-						"timestamp": time.Now().Format(time.RFC3339),
-					}); err != nil {
-						log.Printf("⚠️ 发送心跳失败: %v", err)
-					} else {
-						log.Printf("💓 发送心跳 (room: %s)", p.roomID)
-					}
-				}
-			case <-p.stopHeartbeat:
-				return
-			}
-		}
-	}()
-	
-	log.Printf("✅ 心跳机制已启动 (room: %s)", p.roomID)
-}
-
-// stopHeartbeat 停止心跳机制
-func (p *P2PConnector) stopHeartbeat() {
-	if p.heartbeatTicker != nil {
-		p.heartbeatTicker.Stop()
-	}
-	if p.stopHeartbeat != nil {
-		close(p.stopHeartbeat)
-	}
-	log.Printf("🛑 心跳机制已停止 (room: %s)", p.roomID)
-}
-
 func (p *P2PConnector) Close() {
 	p.mu.Lock()
 	defer p.mu.Unlock()
-	
-	// 停止心跳
-	p.stopHeartbeat()
 	
 	if p.signalingClient != nil {
 		p.signalingClient.Close()

@@ -96,7 +96,7 @@ func NewConnection(connectionID string, isHost bool, config ConnectionConfig) (*
 		peerConnection.OnDataChannel(func(dc *webrtc.DataChannel) {
 			conn.setupDataChannel(dc)
 			conn.dataChannel = dc
-			log.Printf("Data channel '%s' opened\n", dc.Label())
+			log.Printf("📡 数据通道 '%s' opened\n", dc.Label())
 		})
 	}
 
@@ -121,7 +121,7 @@ func (c *Connection) setupDataChannel(dc *webrtc.DataChannel) {
 	})
 
 	dc.OnClose(func() {
-		log.Printf("Data channel '%s' closed\n", dc.Label())
+		log.Printf("📡 数据通道 '%s' closed\n", dc.Label())
 		c.close()
 	})
 }
