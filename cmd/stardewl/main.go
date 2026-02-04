@@ -162,16 +162,29 @@ func runAsClient(signalingURL, connectionID, modsPath string, verbose bool) {
 	fmt.Println("正在连接到主机...")
 	fmt.Println("(按 Ctrl+C 退出)")
 	
-	// 测试服务器连接
-	fmt.Println("测试服务器连接...")
-	resp, err := http.Get(strings.Replace(signalingURL, "ws://", "http://", 1))
+	// 验证房间是否存在
+	fmt.Println("验证房间是否存在...")
+	checkRoomURL := strings.Replace(signalingURL, "ws://", "http://", 1)
+	checkRoomURL = strings.Replace(checkRoomURL, "/ws", "/join/"+connectionID, 1)
+	
+	resp, err := http.Get(checkRoomURL)
 	if err != nil {
 		fmt.Printf("❌ 无法连接到信令服务器: %v\n", err)
 		fmt.Println("请确保信令服务器正在运行: ./dist/stardewl-signaling")
 		os.Exit(1)
 	}
-	resp.Body.Close()
-	fmt.Println("✅ 信令服务器可访问")
+	defer resp.Body.Close()
+	
+	if resp.StatusCode == 404 {
+		fmt.Printf("❌ 房间不存在: %s\n", connectionID)
+		fmt.Println("请检查连接码是否正确，或让主机先创建房间")
+		os.Exit(1)
+	} else if resp.StatusCode != 200 {
+		fmt.Printf("❌ 验证房间失败，状态码: %d\n", resp.StatusCode)
+		os.Exit(1)
+	}
+	
+	fmt.Println("✅ 房间验证通过")
 
 	// 创建P2P连接器配置
 	config := core.P2PConfig{
